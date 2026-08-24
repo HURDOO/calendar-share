@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 
+import { ShareDashboard } from './ShareDashboard'
+
 interface SessionResponse {
   readonly authenticated: true
   readonly csrfToken: string
@@ -340,6 +342,8 @@ export function AdminApp() {
             </>
           )}
         </section>
+
+        <ShareDashboard csrfToken={session.csrfToken} />
 
         {message ? (
           <p className="form-message" role="alert">

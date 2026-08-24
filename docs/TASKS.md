@@ -57,14 +57,15 @@
 - 완료 조건: Kakao 인앱 브라우저 상당 viewport와 데스크톱 E2E에서 링크 열람·갱신이 동작하고 DOM에 관리자 링크가 없으며 범위 밖 데이터가 응답에 없다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(79개), `pnpm build`, `pnpm test:e2e`(Chromium 4개) 통과. token URL의 clean redirect, 방문자 세션·공유 ID 결합, 모바일 390×844 날짜별 목록, 1280px 월간 달력, 로딩·빈·접근 불가·오류 상태, 실제 HTTP SSE 인증과 데이터 없는 갱신 신호, 성공한 Google event sync 후 refetch, 관리자 링크 부재를 검증했다.
 
-## [>] T-008 관리자 공유 대시보드와 미리보기 구현
+## [x] T-008 관리자 공유 대시보드와 미리보기 구현
 
 - 범위: 연결 상태, 공유 목록, 생성/편집/폐기, 링크 복사, 실제 정책 기반 미리보기 UI를 구현한다.
 - 선행 조건: T-004, T-005, T-006, T-007의 공유 일정 컴포넌트.
 - 산출물: 관리자 대시보드 화면과 폼 검증, 미리보기, E2E.
 - 완료 조건: 생성→미리보기→수정→폐기 흐름이 브라우저 테스트를 통과하고 미리보기와 방문자 이벤트 집합이 일치한다.
+- 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(80개), `pnpm build`, `pnpm test:e2e`(Chromium 5개) 통과. `ALL` 기본값과 빈 `SELECTED` 허용 목록, 공유 날짜·접근 시간 폼 검증, 생성·회전 때만 보이는 일회성 원문 링크, 복사, 실제 공개 정책 API와 방문자 일정 컴포넌트를 재사용한 미리보기, 수정·즉시 폐기·CSRF 헤더를 검증했다.
 
-## [ ] T-009 보안·접근성·호환성 강화
+## [>] T-009 보안·접근성·호환성 강화
 
 - 범위: 보안 헤더, cache/noindex/referrer 정책, proxy-aware rate limit, URL/log redaction, 키보드·대비·레이블, 모바일 WebView 호환성을 검증한다.
 - 선행 조건: T-007, T-008.

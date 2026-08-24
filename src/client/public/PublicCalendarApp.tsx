@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-interface PublicEvent {
+export interface PublicEvent {
   readonly id: string
   readonly calendar: {
     readonly id: string
@@ -139,18 +139,24 @@ export function PublicCalendarApp({ expectedShareId }: { expectedShareId: string
     )
   }
 
-  return <PublicCalendarView data={page.data} stream={stream} />
+  return (
+    <main className="visitor-shell">
+      <PublicCalendarView data={page.data} stream={stream} />
+    </main>
+  )
 }
 
 export function PublicCalendarView({
   data,
   stream = 'unsupported',
+  showStreamStatus = true,
 }: {
   readonly data: PublicCalendarData
   readonly stream?: StreamState
+  readonly showStreamStatus?: boolean
 }) {
   return (
-    <main className="visitor-shell">
+    <>
       <header className="visitor-header">
         <div>
           <span className="eyebrow">Shared calendar</span>
@@ -159,9 +165,11 @@ export function PublicCalendarView({
             {formatDateRange(data.share.eventStartDate, data.share.eventEndDate)}
           </p>
         </div>
-        <span className={`live-status live-status--${stream}`} role="status">
-          {streamLabel(stream)}
-        </span>
+        {showStreamStatus ? (
+          <span className={`live-status live-status--${stream}`} role="status">
+            {streamLabel(stream)}
+          </span>
+        ) : null}
       </header>
 
       {data.events.length === 0 ? (
@@ -182,7 +190,7 @@ export function PublicCalendarView({
           </section>
         </>
       )}
-    </main>
+    </>
   )
 }
 

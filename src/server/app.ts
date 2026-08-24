@@ -63,7 +63,7 @@ export async function buildServer(options: BuildServerOptions) {
   })
   app.get('/api/v1/meta', async () => ({
     name: '캘공',
-    phase: 'visitor-calendar',
+    phase: 'admin-dashboard',
   }))
 
   await registerAdminAuth(app, {

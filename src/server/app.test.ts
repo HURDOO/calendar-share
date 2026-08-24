@@ -54,12 +54,12 @@ describe('server foundation', () => {
     expect(response.json()).toEqual({ status: 'ok', phase: 'database' })
   })
 
-  it('reports the visitor calendar implementation phase', async () => {
+  it('reports the administrator dashboard implementation phase', async () => {
     const app = await createApp()
 
     const response = await app.inject({ method: 'GET', url: '/api/v1/meta' })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({ name: '캘공', phase: 'visitor-calendar' })
+    expect(response.json()).toEqual({ name: '캘공', phase: 'admin-dashboard' })
   })
 })
