@@ -42,6 +42,7 @@ async function main() {
       logger: true,
       logLevel: runtime.logLevel,
       secureCookies: runtime.nodeEnv === 'production',
+      timeZone: runtime.appTimeZone,
     })
 
     await app.listen({ host: runtime.host, port: runtime.port })

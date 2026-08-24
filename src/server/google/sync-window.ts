@@ -36,7 +36,7 @@ function addMonthsClamped(date: string, amount: number): string {
   return formatDate(targetYear, targetMonth, Math.min(day, lastDay))
 }
 
-function addDays(date: string, amount: number): string {
+export function addDays(date: string, amount: number): string {
   const { year, month, day } = parseDate(date)
   const result = new Date(Date.UTC(year, month - 1, day + amount))
   return formatDate(
@@ -46,7 +46,7 @@ function addDays(date: string, amount: number): string {
   )
 }
 
-function zonedMidnightToInstant(date: string, timeZone: string): Date {
+export function zonedMidnightToInstant(date: string, timeZone: string): Date {
   const { year, month, day } = parseDate(date)
   const desired = Date.UTC(year, month - 1, day, 0, 0, 0)
   let candidate = desired

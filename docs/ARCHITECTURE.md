@@ -2,7 +2,7 @@
 
 ## 1. 상태
 
-- 상태: T-005 Google OAuth·동기화 기반 구현 완료, 공유 도메인은 후속 작업
+- 상태: T-006 공유 정책·관리 API 구현 완료, 방문자 UI는 후속 작업
 - 작성일: 2026-08-25
 - 전제: 단일 관리자, 단일 Raspberry Pi 인스턴스, SQLite 영속 볼륨
 - 승인된 제약과 제안 선택은 `docs/DECISIONS.md`에서 구분한다.
@@ -136,8 +136,9 @@ Google 계약 근거:
 ### 방문자
 
 - 공유 링크 원문 토큰은 최소 256비트다. DB에는 SHA-256 또는 keyed hash만 저장하고 상수 시간 비교를 사용한다.
-- `/s/:token` 검증 성공 시 share ID, 만료, nonce가 보호된 HttpOnly 세션으로 교환되고 `/share/:publicId`로 redirect한다.
+- `/s/:token` 검증 성공 시 share ID와 만료를 가진 서버 저장형 HttpOnly 세션으로 교환되고 `/share/:publicId`로 redirect한다. 세션은 30분 유휴·12시간 절대 만료이며 접근 종료가 더 빠르면 서버 만료도 그 시각으로 제한한다.
 - 이후 모든 조회는 세션 서명뿐 아니라 현재 공유 row의 폐기/시간/캘린더/일정 범위를 다시 확인한다. 링크 폐기는 즉시 효력을 갖는다.
+- 원문 token은 생성 또는 회전 응답에서 한 번만 제공한다. 관리자가 링크를 다시 발급하면 token hash를 교체하고 해당 공유의 기존 방문자 세션을 모두 폐기한다.
 - URL, access log, analytics, Referer에 원문 토큰이 남지 않도록 reverse proxy와 앱 로깅에서 경로를 redaction한다.
 
 ### Google

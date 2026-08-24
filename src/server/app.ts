@@ -8,6 +8,7 @@ import {
   registerGoogleFeature,
   type RegisterGoogleFeatureOptions,
 } from './google/google-feature'
+import { registerShareFeature } from './shares/share-feature'
 
 export const LOGGER_REDACTION_PATHS = [
   'req.headers.authorization',
@@ -26,6 +27,7 @@ interface BuildServerOptions {
   readonly logger?: boolean
   readonly logLevel?: RuntimeConfig['logLevel']
   readonly secureCookies?: boolean
+  readonly timeZone?: string
   readonly google?: Omit<
     RegisterGoogleFeatureOptions,
     'appBaseUrl' | 'database' | 'secureCookie'
@@ -61,7 +63,7 @@ export async function buildServer(options: BuildServerOptions) {
   })
   app.get('/api/v1/meta', async () => ({
     name: '캘공',
-    phase: 'database',
+    phase: 'share-policy',
   }))
 
   await registerAdminAuth(app, {
@@ -78,6 +80,14 @@ export async function buildServer(options: BuildServerOptions) {
       secureCookie: options.secureCookies ?? false,
     })
   }
+
+  await registerShareFeature(app, {
+    appBaseUrl: options.appBaseUrl,
+    database: options.database,
+    ...(options.adminAuth.now ? { now: options.adminAuth.now } : {}),
+    secureCookie: options.secureCookies ?? false,
+    timeZone: options.timeZone ?? 'Asia/Seoul',
+  })
 
   if (options.publicDir) {
     await app.register(fastifyStatic, {
