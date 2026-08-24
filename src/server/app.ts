@@ -1,14 +1,26 @@
 import fastifyStatic from '@fastify/static'
 import Fastify from 'fastify'
 
+import { registerAdminAuth, type RegisterAdminAuthOptions } from './auth/admin-routes'
 import type { RuntimeConfig } from './config'
 import type { AppDatabase } from './db/database'
 
+export const LOGGER_REDACTION_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers.x-csrf-token',
+  'req.url',
+  'res.headers.set-cookie',
+] as const
+
 interface BuildServerOptions {
+  readonly adminAuth: Omit<RegisterAdminAuthOptions, 'appBaseUrl' | 'secureCookie'>
+  readonly appBaseUrl: string
   readonly database: AppDatabase
   readonly publicDir?: string
   readonly logger?: boolean
   readonly logLevel?: RuntimeConfig['logLevel']
+  readonly secureCookies?: boolean
 }
 
 export async function buildServer(options: BuildServerOptions) {
@@ -17,7 +29,7 @@ export async function buildServer(options: BuildServerOptions) {
       ? {
           level: options.logLevel ?? 'info',
           redact: {
-            paths: ['req.headers.authorization', 'req.headers.cookie', 'req.url'],
+            paths: [...LOGGER_REDACTION_PATHS],
             censor: '[Redacted]',
           },
         }
@@ -42,6 +54,12 @@ export async function buildServer(options: BuildServerOptions) {
     name: '캘공',
     phase: 'database',
   }))
+
+  await registerAdminAuth(app, {
+    ...options.adminAuth,
+    appBaseUrl: options.appBaseUrl,
+    secureCookie: options.secureCookies ?? false,
+  })
 
   if (options.publicDir) {
     await app.register(fastifyStatic, {

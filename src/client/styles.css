@@ -31,13 +31,18 @@ select {
   padding: 24px;
 }
 
-.status-card {
+.status-card,
+.login-card {
   width: min(100%, 640px);
   padding: clamp(28px, 7vw, 56px);
   border: 1px solid #d9e8f3;
   border-radius: 28px;
   background: #ffffff;
   box-shadow: 0 18px 50px rgba(38, 91, 125, 0.1);
+}
+
+.login-card {
+  width: min(100%, 480px);
 }
 
 .eyebrow {
@@ -54,6 +59,11 @@ h1 {
   font-size: clamp(3rem, 10vw, 5rem);
   letter-spacing: -0.08em;
   line-height: 0.95;
+}
+
+.admin-header h1,
+.login-card h1 {
+  font-size: clamp(2.25rem, 7vw, 4rem);
 }
 
 .lead {
@@ -89,6 +99,116 @@ h1 {
   font-weight: 700;
 }
 
+.login-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.login-form label {
+  color: #314b5e;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #b9cedc;
+  border-radius: 12px;
+  color: #17202a;
+  background: #ffffff;
+}
+
+.login-form input:focus-visible,
+button:focus-visible {
+  outline: 3px solid rgba(20, 121, 201, 0.35);
+  outline-offset: 2px;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button {
+  margin-top: 8px;
+  padding: 0 18px;
+  color: #ffffff;
+  background: #0b74bd;
+}
+
+.secondary-button {
+  padding: 0 16px;
+  color: #0b639f;
+  background: #e8f4fb;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.form-message {
+  margin: 18px 0 0;
+  color: #a0382f;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.loading-message {
+  color: #425466;
+}
+
+.admin-shell {
+  width: min(100%, 960px);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 56px);
+}
+
+.admin-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.admin-header h1 {
+  margin-bottom: 0;
+}
+
+.admin-panel {
+  margin-top: 48px;
+  padding: 28px;
+  border: 1px solid #d9e8f3;
+  border-radius: 20px;
+  background: #ffffff;
+}
+
+.admin-panel h2 {
+  margin: 6px 0 10px;
+  color: #164666;
+}
+
+.admin-panel p:last-child {
+  margin-bottom: 0;
+  color: #52687a;
+  line-height: 1.6;
+}
+
+.panel-kicker {
+  margin: 0;
+  color: #1479c9;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 @media (max-width: 520px) {
   .app-shell {
     align-items: start;
@@ -98,6 +218,19 @@ h1 {
   .status-card {
     margin-top: 12vh;
     border-radius: 24px;
+  }
+
+  .login-card {
+    margin-top: 8vh;
+  }
+
+  .admin-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .secondary-button {
+    align-self: flex-start;
   }
 
   .status-list {

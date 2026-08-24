@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { config as loadDotenv } from 'dotenv'
 
 import { buildServer } from './app'
+import { loadAdminAuthSecrets } from './auth/config'
 import { ConfigurationError, loadRuntimeConfig } from './config'
 import { databaseFilePath, openDatabase } from './db/database'
 
@@ -16,6 +17,7 @@ async function main() {
   }
 
   const runtime = loadRuntimeConfig()
+  const adminAuth = loadAdminAuthSecrets()
   const publicDir =
     runtime.nodeEnv === 'production'
       ? resolve(fileURLToPath(new URL('../client', import.meta.url)))
@@ -26,10 +28,13 @@ async function main() {
 
   try {
     const app = await buildServer({
+      adminAuth,
+      appBaseUrl: runtime.appBaseUrl,
       database,
       ...(publicDir ? { publicDir } : {}),
       logger: true,
       logLevel: runtime.logLevel,
+      secureCookies: runtime.nodeEnv === 'production',
     })
 
     await app.listen({ host: runtime.host, port: runtime.port })

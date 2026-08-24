@@ -2,7 +2,7 @@
 
 내 Google 캘린더 일정을 사람별로 정한 범위와 기간만큼 안전하게 공유하는 개인용 서비스입니다.
 
-> 현재 상태: T-003 SQLite 데이터 계층 완료. 다음 작업은 관리자 인증과 보안 세션입니다.
+> 현재 상태: T-004 관리자 인증과 보안 세션 완료. 다음 작업은 Google OAuth와 일정 동기화입니다.
 
 관리자는 비밀번호로 보호된 대시보드에서 공유 링크와 공개 범위를 관리합니다. 방문자는 전달받은 링크를 열어 허용된 캘린더와 기간의 일정만 확인합니다.
 
@@ -28,6 +28,13 @@ pnpm dev
 - Google OAuth 개발 callback: `http://localhost:8464/api/v1/admin/google/callback`
 
 로컬 비밀값은 gitignored `.env.local`에서 사용자가 직접 관리합니다. Codex는 해당 파일 내용을 읽거나 출력하지 않습니다. 키 이름 계약은 `.env.example`에만 기록합니다.
+
+관리자 서버를 실행하려면 다음 두 값을 먼저 준비해야 합니다.
+
+- `ADMIN_PASSWORD_HASH`: `pnpm admin:hash-password` 출력
+- `SESSION_SECRET`: `pnpm secret:generate` 출력
+
+관리자 화면은 공개 화면에 링크하지 않으며 주소창에서 `/admin`으로 직접 들어갑니다.
 
 ## 검증 명령
 
@@ -62,3 +69,11 @@ pnpm secret:generate
 ```
 
 `admin:hash-password`는 TTY 숨김 입력으로 12자 이상의 비밀번호를 두 번 받고 scrypt verifier를 출력합니다. `secret:generate`는 `SESSION_SECRET`과 `GOOGLE_TOKEN_ENCRYPTION_KEY`에 사용할 256비트 값을 한 번에 하나씩 출력합니다.
+
+## 관리자 인증 보안 계약
+
+- 서버 저장형 세션의 원문 token은 `HttpOnly`, `SameSite=Lax` 쿠키에만 두고 DB에는 SHA-256 hash만 저장합니다.
+- 운영 HTTPS에서는 `Secure` 쿠키를 사용하며 로컬 HTTP 개발에서만 `Secure`를 끕니다.
+- 유휴 만료는 30분, 절대 만료는 8시간이며 서버에서 강제합니다.
+- 로그인과 로그아웃은 정확한 Origin을 검사하고, 인증 후 상태 변경은 세션에 결합된 `X-CSRF-Token`도 요구합니다.
+- 로그인 실패는 클라이언트 주소별 15분 동안 5회까지만 허용합니다.

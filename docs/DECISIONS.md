@@ -111,3 +111,11 @@
 - 결정: Vite 개발 서버는 `http://localhost:8464`, Fastify API는 `http://127.0.0.1:8465`를 사용한다. Vite가 API 요청을 Fastify로 proxy하며 로컬 Google OAuth callback은 `http://localhost:8464/api/v1/admin/google/callback`이다.
 - 고려한 대안: 기존 5173/3000 유지, Google callback을 API 포트에 직접 연결.
 - 결과와 트레이드오프: Google Cloud OAuth 클라이언트의 개발용 승인된 리디렉션 URI를 새 Vite origin으로 갱신해야 한다. API 포트는 외부 callback URI로 등록하지 않는다.
+
+## 2026-08-25: 관리자 세션은 서버 저장형 token과 이중 CSRF 방어 사용
+
+- 상태: 승인
+- 맥락: 단일 관리자 대시보드도 탈취·고정·CSRF와 장기 세션 재사용을 막아야 하며, 로컬 HTTP 개발도 가능해야 한다.
+- 결정: 로그인마다 256비트 token을 발급하고 DB에는 SHA-256 hash만 저장한다. 운영 쿠키는 Secure/HttpOnly/SameSite=Lax/Path=/, 유휴 만료 30분, 절대 만료 8시간이다. 상태 변경은 정확한 Origin과 세션 ID에 HMAC으로 결합한 CSRF header를 모두 검증한다. 로컬 HTTP에서만 Secure 속성을 끈다.
+- 고려한 대안: stateless JWT, 암호화 cookie session, SameSite만 사용, CSRF cookie, 무기한 세션.
+- 결과와 트레이드오프: 즉시 서버 폐기와 명확한 만료가 가능하고 CSRF token을 브라우저 저장소에 영속화하지 않는다. 매 인증 요청에 SQLite 조회·갱신이 발생하며 프로세스 재시작 뒤 로그인 rate-limit 기록은 초기화된다.

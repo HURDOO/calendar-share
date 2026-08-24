@@ -27,6 +27,7 @@
     "secret:generate": "tsx scripts/generate-secret.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.2",
     "@fastify/static": "^10.1.3",
     "better-sqlite3": "13.0.3",
     "dotenv": "^17.4.2",

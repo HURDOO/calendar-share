@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SCRYPT_PARAMETERS,
   encodeSecretMaterial,
+  hashSecret,
   hashPassword,
+  secretsMatch,
   verifyPassword,
 } from './secrets'
 
@@ -37,5 +39,17 @@ describe('secret utilities', () => {
 
     expect(encoded).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(encoded).not.toContain('=')
+  })
+
+  it('hashes opaque tokens and compares encoded values safely', () => {
+    const first = hashSecret('first-token')
+    const repeated = hashSecret('first-token')
+    const different = hashSecret('different-token')
+
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(first).toBe(repeated)
+    expect(first).not.toBe(different)
+    expect(secretsMatch(first, repeated)).toBe(true)
+    expect(secretsMatch(first, different)).toBe(false)
   })
 })

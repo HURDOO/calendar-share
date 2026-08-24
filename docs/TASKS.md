@@ -25,14 +25,15 @@
 - 완료 조건: 빈 DB migration, 재실행, foreign key/고유키/시간 경계 통합 테스트가 통과하고 migration 파일이 추적된다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(17개), `pnpm build` 통과. 빈 DB migration 재실행, foreign key, event/token 고유키, 일정·공유·세션 시간 경계, private 상세 차단, 활성 sync job dedupe를 실제 SQLite에서 검증했다.
 
-## [>] T-004 관리자 인증과 보안 세션 구현
+## [x] T-004 관리자 인증과 보안 세션 구현
 
 - 범위: 비밀번호 검증, 로그인 rate limit, 관리자 세션, logout, CSRF/Origin 검증, 보호된 `/admin` shell을 구현한다.
 - 선행 조건: T-003.
 - 산출물: 인증 API와 middleware, 로그인/로그아웃 UI, 보안 테스트.
 - 완료 조건: 정상·오류·만료·폐기·CSRF·반복 실패 테스트가 통과하고 쿠키 속성과 로그 redaction이 검증된다.
+- 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(30개), `pnpm build`, `pnpm test:e2e` 통과. 정상·오류 로그인, 정확한 Origin, IP별 반복 실패, HttpOnly/Secure/SameSite 쿠키, DB token hash, 30분 유휴·8시간 절대 만료, logout 폐기, session-bound CSRF와 로그 redaction을 검증했다.
 
-## [ ] T-005 Google OAuth와 동기화 수직 흐름 구현
+## [>] T-005 Google OAuth와 동기화 수직 흐름 구현
 
 - 범위: OAuth 연결, token 암호화, CalendarList/Events 초기 및 증분 sync, 매일 ±3개월 window 교체, 삭제/반복 일정, CalendarList/Events watch webhook, durable job, 채널 갱신과 복구 sync를 구현한다.
 - 선행 조건: T-003, Google Cloud 테스트 자격 증명 또는 fake adapter 계약.

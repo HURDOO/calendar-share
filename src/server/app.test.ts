@@ -1,13 +1,33 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
+import { encodeSecretMaterial, hashPassword } from '../shared/secrets'
 import { buildServer } from './app'
 import { createTestDatabase } from './db/testing'
 
 describe('server foundation', () => {
   const apps: Awaited<ReturnType<typeof buildServer>>[] = []
+  let passwordVerifier = ''
+
+  beforeAll(async () => {
+    passwordVerifier = await hashPassword('test-password', {
+      n: 2 ** 10,
+      r: 8,
+      p: 1,
+      keyLength: 32,
+      saltLength: 16,
+      maxmem: 8 * 1024 * 1024,
+    })
+  })
 
   async function createApp() {
-    const app = await buildServer({ database: createTestDatabase() })
+    const app = await buildServer({
+      adminAuth: {
+        passwordVerifier,
+        sessionSecret: encodeSecretMaterial(new Uint8Array(32).fill(4)),
+      },
+      appBaseUrl: 'http://localhost:8464',
+      database: createTestDatabase(),
+    })
     apps.push(app)
     return app
   }

@@ -2,7 +2,7 @@
 
 ## 1. 상태
 
-- 상태: T-003 SQLite 데이터 기반 구현 완료, 인증·Google 동기화·공유 도메인은 후속 작업
+- 상태: T-004 관리자 인증 기반 구현 완료, Google 동기화·공유 도메인은 후속 작업
 - 작성일: 2026-08-25
 - 전제: 단일 관리자, 단일 Raspberry Pi 인스턴스, SQLite 영속 볼륨
 - 승인된 제약과 제안 선택은 `docs/DECISIONS.md`에서 구분한다.
@@ -127,10 +127,11 @@ Google 계약 근거:
 
 ### 관리자
 
-- 관리자는 한 명이다. `pnpm admin:hash-password` CLI가 비밀번호를 숨김 입력·확인하고 encoded verifier만 출력한다. 사용자가 이 값을 deployd 대시보드의 `ADMIN_PASSWORD_HASH` secret으로 등록하면 런타임 환경변수로 주입된다. 원문 비밀번호를 인자나 환경변수로 전달하지 않는다.
-- 비밀번호는 scrypt 또는 구현 시 검증된 동급 알고리즘으로 해시한다. 로그인 성공 시 최소 256비트 난수 세션을 발급하고 DB에는 해시만 저장한다.
-- 관리자 쿠키는 Secure/HttpOnly/SameSite=Lax이며 유휴/절대 만료와 서버 폐기를 지원한다.
-- 상태 변경에는 Origin 검증과 CSRF token을 함께 사용한다.
+- 관리자는 한 명이다. `pnpm admin:hash-password` CLI가 비밀번호를 숨김 입력·확인하고 encoded scrypt verifier만 출력한다. 사용자가 이 값을 deployd 대시보드의 `ADMIN_PASSWORD_HASH` secret으로 등록하면 런타임 환경변수로 주입된다. 원문 비밀번호를 인자나 환경변수로 전달하지 않는다.
+- 로그인 성공 시 256비트 난수 세션을 발급하고 DB에는 SHA-256 hash만 저장한다. 유휴 30분과 절대 8시간 만료를 서버에서 검사하고 logout·만료 시 DB row를 폐기한다.
+- 관리자 쿠키는 운영에서 Secure/HttpOnly/SameSite=Lax/Path=/이며, 로컬 HTTP 개발에서만 Secure를 끈다.
+- 로그인과 상태 변경은 정확한 `APP_BASE_URL` Origin을 요구한다. 인증 후 상태 변경은 세션 ID에 HMAC으로 결합해 JSON으로 전달한 token을 `X-CSRF-Token` header로 되돌려 받아 함께 검증한다.
+- 로그인 실패는 프로세스 메모리에서 client IP별 15분 window에 5회로 제한한다. reverse proxy의 신뢰 경계와 분산 제한은 T-009에서 강화한다.
 
 ### 방문자
 

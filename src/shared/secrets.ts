@@ -1,4 +1,4 @@
-import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 
 export interface ScryptParameters {
   readonly n: number
@@ -132,4 +132,18 @@ export function encodeSecretMaterial(material: Uint8Array): string {
 
 export function generateSecret(): string {
   return encodeSecretMaterial(randomBytes(32))
+}
+
+export function hashSecret(secret: string): string {
+  return createHash('sha256').update(secret, 'utf8').digest('base64url')
+}
+
+export function secretsMatch(actual: string, expected: string): boolean {
+  const actualBytes = Buffer.from(actual, 'utf8')
+  const expectedBytes = Buffer.from(expected, 'utf8')
+
+  return (
+    actualBytes.length === expectedBytes.length &&
+    timingSafeEqual(actualBytes, expectedBytes)
+  )
 }
