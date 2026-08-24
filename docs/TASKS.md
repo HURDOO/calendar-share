@@ -65,14 +65,15 @@
 - 완료 조건: 생성→미리보기→수정→폐기 흐름이 브라우저 테스트를 통과하고 미리보기와 방문자 이벤트 집합이 일치한다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(80개), `pnpm build`, `pnpm test:e2e`(Chromium 5개) 통과. `ALL` 기본값과 빈 `SELECTED` 허용 목록, 공유 날짜·접근 시간 폼 검증, 생성·회전 때만 보이는 일회성 원문 링크, 복사, 실제 공개 정책 API와 방문자 일정 컴포넌트를 재사용한 미리보기, 수정·즉시 폐기·CSRF 헤더를 검증했다.
 
-## [>] T-009 보안·접근성·호환성 강화
+## [x] T-009 보안·접근성·호환성 강화
 
 - 범위: 보안 헤더, cache/noindex/referrer 정책, proxy-aware rate limit, URL/log redaction, 키보드·대비·레이블, 모바일 WebView 호환성을 검증한다.
 - 선행 조건: T-007, T-008.
 - 산출물: 보안/접근성 자동 검사와 수동 점검표, 위협 모델 갱신.
 - 완료 조건: 토큰/비밀값 누출 검사, 핵심 키보드 흐름, 합의된 접근성 기준, 모바일/데스크톱 브라우저 matrix가 통과한다.
+- 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(87개), `pnpm build`, `pnpm security:bundle-check`, `pnpm audit --prod` 통과. `pnpm test:e2e`는 Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했다. 전역 CSP·no-store/noindex/referrer/nosniff/frame/HSTS 경계, fingerprint asset cache, 64KiB body limit, 500 오류 마스킹, proxy allowlist 기반 client IP rate limit과 비신뢰 forwarded header 무시, URL·인증 필드 로그 redaction, 클라이언트 bundle secret scan, axe WCAG A/AA 위반 0건, 키보드 로그인·공유 편집·월 이동, KakaoTalk형 UA·touch viewport·EventSource/clipboard fallback을 검증했다.
 
-## [ ] T-010 관측성, 백업과 운영 준비
+## [>] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.
 - 선행 조건: T-005~T-009.

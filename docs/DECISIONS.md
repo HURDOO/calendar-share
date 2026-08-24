@@ -151,3 +151,19 @@
 - 결정: 프로세스 내 broker는 인증된 `/api/v1/public/stream`에 `changed` 신호만 보내고, 브라우저가 같은 방문자 세션으로 정책 필터된 events API를 다시 조회한다. 이벤트/window/recovery sync가 성공한 뒤와 공유 수정·회전·폐기 시 신호를 발행한다.
 - 고려한 대안: SSE payload에 일정 전체 포함, 정기 polling만 사용, WebSocket 양방향 연결.
 - 결과와 트레이드오프: 공개 데이터 경계가 단일 정책 평가기에 유지되고 신호 자체가 유출할 정보가 없다. 한 변경에 추가 API 조회가 생기며 단일 프로세스 broker이므로 재시작 중 연결은 브라우저 자동 재연결에 의존한다.
+
+## 2026-08-25: 신뢰 proxy는 IP/CIDR allowlist로 제한
+
+- 상태: 승인된 보안 기본값
+- 맥락: 운영 reverse proxy 뒤에서 `request.ip`를 쓰려면 forwarded header가 필요하지만 모든 proxy를 신뢰하면 직접 요청이 client IP를 위조해 로그인 제한을 우회할 수 있다.
+- 결정: `TRUST_PROXY`는 Fastify 바로 앞 proxy의 명시적 IP/CIDR 목록만 받으며 `true`, hop 수, 임의 이름은 허용하지 않는다. 기본값은 `127.0.0.1,::1`이고 실제 배포 network가 다르면 reviewable environment로 변경한다.
+- 고려한 대안: `trustProxy=true`, 첫 hop 무조건 신뢰, proxy IP 하나로 모든 사용자를 제한, forwarded header 직접 파싱.
+- 결과와 트레이드오프: 허용된 proxy를 통한 실제 client별 rate limit과 spoof 방지를 함께 얻는다. 배포 network 변경 시 allowlist를 같이 갱신해야 하며 proxy가 앱 포트 직접 접근을 차단하고 forwarded header를 정규화해야 한다.
+
+## 2026-08-25: 보안 응답 정책은 Fastify 전역 경계에서 적용
+
+- 상태: 승인된 보안 기본값
+- 맥락: token 교환이나 일부 API만 cache/referrer 정책을 설정하면 SPA fallback, 오류 응답, 새 route에서 보호가 누락될 수 있다.
+- 결정: Fastify `onSend` 경계에서 CSP, frame 차단, MIME sniffing 차단, 권한 API 제한, `no-referrer`, `noindex`와 기본 `no-store`를 적용한다. Vite fingerprint asset만 1년 immutable cache를 허용하고 HSTS는 운영 HTTPS에서만 보낸다. SSE hijack 응답은 같은 header 집합을 명시적으로 복사한다.
+- 고려한 대안: reverse proxy header만 사용, route별 header, 모든 자산 `no-store`, HSTS를 로컬 HTTP에도 적용.
+- 결과와 트레이드오프: 새 응답도 secure-by-default가 되며 정적 asset 성능은 유지된다. Google 캘린더 색상을 inline style로 표현하기 위해 style CSP에만 `unsafe-inline`이 남고 script는 same-origin으로 제한한다.

@@ -1,3 +1,5 @@
+import { isIP } from 'node:net'
+
 import { z } from 'zod'
 
 export const REQUIRED_SECRET_NAMES = [
@@ -18,6 +20,12 @@ const environmentSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  TRUST_PROXY: z
+    .string()
+    .trim()
+    .min(1)
+    .refine(isTrustedProxyList)
+    .default('127.0.0.1,::1'),
 })
 
 export class ConfigurationError extends Error {
@@ -37,6 +45,7 @@ export interface RuntimeConfig {
   readonly appTimeZone: string
   readonly storageDir: string
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent'
+  readonly trustProxy: string
 }
 
 export function loadRuntimeConfig(
@@ -74,5 +83,24 @@ export function loadRuntimeConfig(
     appTimeZone: result.data.APP_TIME_ZONE,
     storageDir: result.data.STORAGE_DIR,
     logLevel: result.data.LOG_LEVEL,
+    trustProxy: result.data.TRUST_PROXY,
   }
+}
+
+function isTrustedProxyList(value: string): boolean {
+  return value.split(',').every((rawEntry) => {
+    const [address = '', prefix, ...extra] = rawEntry.trim().split('/')
+    const version = isIP(address)
+    if (version === 0 || extra.length > 0) {
+      return false
+    }
+    if (prefix === undefined) {
+      return true
+    }
+    if (!/^\d+$/.test(prefix)) {
+      return false
+    }
+    const bits = Number(prefix)
+    return bits >= 0 && bits <= (version === 4 ? 32 : 128)
+  })
 }

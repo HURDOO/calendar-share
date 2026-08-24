@@ -43,6 +43,7 @@ async function main() {
       logLevel: runtime.logLevel,
       secureCookies: runtime.nodeEnv === 'production',
       timeZone: runtime.appTimeZone,
+      trustProxy: runtime.trustProxy,
     })
 
     await app.listen({ host: runtime.host, port: runtime.port })

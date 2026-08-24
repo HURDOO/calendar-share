@@ -2,7 +2,7 @@
 
 ## 1. 상태
 
-- 상태: T-008 관리자 공유 대시보드·실제 정책 미리보기 구현 완료, 보안·접근성·호환성 강화는 후속 작업
+- 상태: T-009 보안·접근성·브라우저 호환성 강화 완료, 관측성·백업·운영 준비는 후속 작업
 - 작성일: 2026-08-25
 - 전제: 단일 관리자, 단일 Raspberry Pi 인스턴스, SQLite 영속 볼륨
 - 승인된 제약과 제안 선택은 `docs/DECISIONS.md`에서 구분한다.
@@ -131,7 +131,7 @@ Google 계약 근거:
 - 로그인 성공 시 256비트 난수 세션을 발급하고 DB에는 SHA-256 hash만 저장한다. 유휴 30분과 절대 8시간 만료를 서버에서 검사하고 logout·만료 시 DB row를 폐기한다.
 - 관리자 쿠키는 운영에서 Secure/HttpOnly/SameSite=Lax/Path=/이며, 로컬 HTTP 개발에서만 Secure를 끈다.
 - 로그인과 상태 변경은 정확한 `APP_BASE_URL` Origin을 요구한다. 인증 후 상태 변경은 세션 ID에 HMAC으로 결합해 JSON으로 전달한 token을 `X-CSRF-Token` header로 되돌려 받아 함께 검증한다.
-- 로그인 실패는 프로세스 메모리에서 client IP별 15분 window에 5회로 제한한다. reverse proxy의 신뢰 경계와 분산 제한은 T-009에서 강화한다.
+- 로그인 실패는 프로세스 메모리에서 client IP별 15분 window에 5회로 제한한다. Fastify는 `TRUST_PROXY`에 적힌 바로 앞 proxy IP/CIDR만 신뢰하며 `request.ip`로 전달된 실제 client를 구분한다. reverse proxy는 앱 포트의 직접 접근을 막고 `X-Forwarded-For`를 정규화하며 별도 외곽 rate limit도 적용한다.
 
 ### 방문자
 
@@ -140,6 +140,7 @@ Google 계약 근거:
 - 이후 모든 조회는 세션 서명뿐 아니라 현재 공유 row의 폐기/시간/캘린더/일정 범위를 다시 확인한다. 링크 폐기는 즉시 효력을 갖는다.
 - 원문 token은 생성 또는 회전 응답에서 한 번만 제공한다. 관리자가 링크를 다시 발급하면 token hash를 교체하고 해당 공유의 기존 방문자 세션을 모두 폐기한다.
 - URL, access log, analytics, Referer에 원문 토큰이 남지 않도록 reverse proxy와 앱 로깅에서 경로를 redaction한다.
+- 모든 동적·HTML 응답은 `no-store`, fingerprint `/assets/*`만 1년 immutable cache를 사용한다. CSP의 script는 same-origin으로 제한하고 frame·object·권한 API를 차단하며 `no-referrer`, `nosniff`, `noindex`를 전역 적용한다. HSTS는 TLS가 보장되는 운영에서만 활성화한다.
 
 ### Google
 
@@ -162,8 +163,8 @@ Google 계약 근거:
 - DB 통합: 마이그레이션, 외래키, 허용 목록, 이벤트 upsert/delete, sync token 410 교체, 작업 dedupe.
 - HTTP 통합: Fastify inject로 관리자 인증/CSRF/rate limit, 토큰 교환, 공개 응답 필터, webhook 헤더 검증.
 - Google 계약: 실제 네트워크 대신 기록된 최소 fixture와 fake client로 페이지네이션, 변경·삭제, 410/429/5xx를 재현한다. 별도 테스트 Google 프로젝트로 제한된 smoke test를 둔다.
-- UI: 컴포넌트 접근성, 빈/로딩/만료/오류 상태, 모바일/데스크톱 레이아웃.
-- E2E: 로그인→Google 연결 stub→공유 생성→미리보기→링크 방문→폐기, 그리고 관리자 링크 부재를 Playwright로 확인한다.
+- UI: axe WCAG A/AA 자동 검사, 키보드 로그인·공유 편집·월 탐색, 빈/로딩/만료/오류 상태, 모바일/데스크톱 레이아웃.
+- E2E: 로그인→Google 연결 stub→공유 생성→미리보기→링크 방문→폐기, 관리자 링크 부재를 Chromium과 WebKit으로 확인한다. Galaxy S9+ viewport·touch·KakaoTalk형 user-agent와 EventSource 부재로 Android WebView fallback을 별도 검증한다.
 - 배포 검증: Linux ARM64 이미지에서 네이티브 SQLite driver load, 마이그레이션, health, 백업/복원 smoke test.
 
 ## 10. 로컬 개발 환경
@@ -172,7 +173,7 @@ Google 계약 근거:
 - 제안 디렉터리: `src/server`, `src/client`, `src/shared`, `drizzle`, `tests`, `data`.
 - 개발 시 Vite dev server는 `http://localhost:8464`에서 `http://127.0.0.1:8465`의 Fastify API로 proxy하고, 프로덕션에서는 Fastify가 Vite 빌드 결과를 같은 origin으로 제공한다.
 - deployd가 제공하는 예약 환경변수는 `APP_BASE_URL`, `STORAGE_DIR`, `NODE_ENV`, `HOST`, `PORT`다. 프로덕션 origin은 `APP_BASE_URL=https://calendar.app.hurdoo.kr`, SQLite 경로는 `${STORAGE_DIR}/calendar-share.db`에서 파생하며 `deploy.json`에서 이 키들을 재선언하지 않는다.
-- reviewable visible environment는 `APP_TIME_ZONE=Asia/Seoul`, `LOG_LEVEL=info`다.
+- reviewable visible environment는 `APP_TIME_ZONE=Asia/Seoul`, `LOG_LEVEL=info`, 바로 앞 reverse proxy allowlist인 `TRUST_PROXY`다.
 - names-only 필수 secret 계약은 `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`다. 실제 값은 저장소, handoff JSON, 로그, 명령 인자에 넣지 않고 사용자가 deployd 대시보드 **Secrets**에 직접 입력한다.
 - 로컬 개발의 `GOOGLE_CLIENT_ID`와 `GOOGLE_CLIENT_SECRET`은 사용자가 관리하는 gitignored `.env.local`에서 애플리케이션만 로드한다. Codex는 파일 내용을 열거나 출력·검색·복사하지 않는다.
 - OAuth callback은 프로덕션에서 `${APP_BASE_URL}/api/v1/admin/google/callback`, 로컬 개발에서 `http://localhost:8464/api/v1/admin/google/callback`을 사용한다. Calendar webhook은 공개 HTTPS가 필요한 `${APP_BASE_URL}/api/v1/google/webhook`만 사용한다.

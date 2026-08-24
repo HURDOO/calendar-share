@@ -482,6 +482,7 @@ function ShareForm({
       <div className="form-field">
         <label htmlFor="share-name">공유 이름</label>
         <input
+          autoFocus
           id="share-name"
           maxLength={120}
           onChange={(event) => setValue({ ...value, name: event.target.value })}

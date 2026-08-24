@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z, ZodError } from 'zod'
 
 import type { AuthenticatedAdminSession } from '../auth/admin-service'
+import { rawSecurityHeaders } from '../security/response-policy'
 import { shareIdParamsSchema, shareWriteSchema } from './share-types'
 import { ShareServiceError } from './share-service'
 
@@ -227,6 +228,7 @@ export async function registerShareRoutes(
 
     reply.hijack()
     reply.raw.writeHead(200, {
+      ...rawSecurityHeaders(options.secureCookie),
       'Cache-Control': 'no-store, no-transform',
       Connection: 'keep-alive',
       'Content-Type': 'text/event-stream; charset=utf-8',

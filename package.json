@@ -21,6 +21,7 @@
     "test": "cross-env NODE_ENV=test vitest run",
     "test:watch": "cross-env NODE_ENV=test vitest",
     "test:e2e": "pnpm build:client && playwright test",
+    "security:bundle-check": "pnpm build:client && tsx scripts/check-client-bundle.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "admin:hash-password": "tsx scripts/hash-admin-password.ts",
@@ -40,6 +41,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",

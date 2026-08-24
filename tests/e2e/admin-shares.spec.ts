@@ -5,13 +5,27 @@ const calendarOne = '60000000-0000-4000-8000-000000000011'
 const calendarTwo = '60000000-0000-4000-8000-000000000012'
 
 test('creates, previews, edits, copies, and revokes a share', async ({
+  browserName,
   context,
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 1000 })
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-    origin: 'http://127.0.0.1:4177',
-  })
+  if (browserName === 'chromium') {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: 'http://127.0.0.1:4177',
+    })
+  } else {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: undefined,
+      })
+      Object.defineProperty(Document.prototype, 'execCommand', {
+        configurable: true,
+        value: () => true,
+      })
+    })
+  }
   page.on('dialog', (dialog) => void dialog.accept())
   let storedShare: ReturnType<typeof shareFixture> | null = null
   const mutationCsrfHeaders: string[] = []

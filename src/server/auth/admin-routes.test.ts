@@ -34,7 +34,7 @@ describe('administrator authentication routes', () => {
     await Promise.all(apps.splice(0).map(async (app) => app.close()))
   })
 
-  async function createApp() {
+  async function createApp(options: { readonly trustProxy?: string } = {}) {
     const app = await buildServer({
       adminAuth: {
         now: () => now,
@@ -44,6 +44,7 @@ describe('administrator authentication routes', () => {
       appBaseUrl: appOrigin,
       database: createTestDatabase(),
       secureCookies: true,
+      ...options,
     })
     apps.push(app)
     return app
@@ -120,6 +121,64 @@ describe('administrator authentication routes', () => {
     expect(blocked.statusCode).toBe(429)
     expect(blocked.json()).toEqual({ code: 'LOGIN_RATE_LIMITED' })
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0)
+  })
+
+  it('uses the forwarded client only through an allowlisted proxy', async () => {
+    const app = await createApp({ trustProxy: '127.0.0.1' })
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/session',
+        headers: {
+          origin: appOrigin,
+          'x-forwarded-for': '203.0.113.10',
+        },
+        payload: { password: 'wrong-password' },
+      })
+      expect(response.statusCode).toBe(401)
+    }
+
+    const otherClient = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/session',
+      headers: {
+        origin: appOrigin,
+        'x-forwarded-for': '203.0.113.11',
+      },
+      payload: { password },
+    })
+
+    expect(otherClient.statusCode).toBe(201)
+  })
+
+  it('ignores spoofed forwarded clients when no proxy is trusted', async () => {
+    const app = await createApp()
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/session',
+        headers: {
+          origin: appOrigin,
+          'x-forwarded-for': `203.0.113.${attempt + 1}`,
+        },
+        payload: { password: 'wrong-password' },
+      })
+      expect(response.statusCode).toBe(401)
+    }
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/session',
+      headers: {
+        origin: appOrigin,
+        'x-forwarded-for': '203.0.113.99',
+      },
+      payload: { password },
+    })
+
+    expect(blocked.statusCode).toBe(429)
   })
 
   it('requires both the expected origin and session-bound CSRF token for logout', async () => {
@@ -202,6 +261,12 @@ describe('administrator authentication routes', () => {
         'req.headers.cookie',
         'req.headers.x-csrf-token',
         'req.headers.x-goog-channel-token',
+        'req.body.password',
+        'req.originalUrl',
+        'req.params.token',
+        'req.query.code',
+        'req.raw.url',
+        'req.url',
         'res.headers.set-cookie',
       ]),
     )

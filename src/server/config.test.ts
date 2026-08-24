@@ -13,6 +13,7 @@ describe('loadRuntimeConfig', () => {
       nodeEnv: 'test',
       port: 8465,
       storageDir: './data',
+      trustProxy: '127.0.0.1,::1',
     })
   })
 
@@ -36,5 +37,18 @@ describe('loadRuntimeConfig', () => {
     } catch (error) {
       expect(String(error)).not.toContain(invalidValue)
     }
+  })
+
+  it('accepts only explicit IP and CIDR proxy allowlists', () => {
+    expect(
+      loadRuntimeConfig({
+        NODE_ENV: 'test',
+        TRUST_PROXY: '127.0.0.1,10.42.0.0/16,::1',
+      }).trustProxy,
+    ).toBe('127.0.0.1,10.42.0.0/16,::1')
+
+    expect(() =>
+      loadRuntimeConfig({ NODE_ENV: 'test', TRUST_PROXY: 'all-proxies' }),
+    ).toThrow('Invalid environment variables: TRUST_PROXY')
   })
 })

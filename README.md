@@ -2,7 +2,7 @@
 
 내 Google 캘린더 일정을 사람별로 정한 범위와 기간만큼 안전하게 공유하는 개인용 서비스입니다.
 
-> 현재 상태: T-008 관리자 공유 대시보드와 실제 정책 미리보기 완료. 다음 작업은 보안·접근성·브라우저 호환성 강화입니다.
+> 현재 상태: T-009 보안·접근성·브라우저 호환성 강화 완료. 다음 작업은 관측성·백업과 운영 준비입니다.
 
 관리자는 비밀번호로 보호된 대시보드에서 공유 링크와 공개 범위를 관리합니다. 방문자는 전달받은 링크를 열어 허용된 캘린더와 기간의 일정만 확인합니다.
 
@@ -13,6 +13,7 @@
 - `docs/ARCHITECTURE.md`: 제안 기술 구조와 운영 설계
 - `docs/TASKS.md`: 구현 순서와 검증 조건
 - `docs/DECISIONS.md`: 승인되었거나 제안된 주요 결정
+- `docs/SECURITY.md`: 위협 모델, 보안 정책, 브라우저 검증과 실기기 점검표
 
 ## 로컬 개발
 
@@ -46,7 +47,10 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm test:e2e
+pnpm security:bundle-check
 ```
+
+`test:e2e`는 Chromium과 WebKit을 직렬 실행합니다. 최초 환경에는 `pnpm exec playwright install chromium webkit`으로 테스트 브라우저를 준비합니다. `security:bundle-check`는 클라이언트 빌드만 검사하며 로컬 `.env.local`을 읽지 않습니다.
 
 ## 데이터베이스와 마이그레이션
 
@@ -79,6 +83,8 @@ pnpm secret:generate
 - 유휴 만료는 30분, 절대 만료는 8시간이며 서버에서 강제합니다.
 - 로그인과 로그아웃은 정확한 Origin을 검사하고, 인증 후 상태 변경은 세션에 결합된 `X-CSRF-Token`도 요구합니다.
 - 로그인 실패는 클라이언트 주소별 15분 동안 5회까지만 허용합니다.
+- `TRUST_PROXY`에는 Fastify 바로 앞 proxy의 IP/CIDR만 나열합니다. 기본값은 loopback이며 운영 proxy 주소가 다르면 배포 환경에서 명시적으로 바꿉니다.
+- 동적 응답은 `no-store`, fingerprint 정적 자산만 1년 immutable cache를 사용합니다. CSP, frame 차단, MIME sniffing 차단, `no-referrer`, `noindex`를 전역 적용하고 HSTS는 운영 HTTPS에서만 보냅니다.
 
 ## Google Calendar 동기화 계약
 

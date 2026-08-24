@@ -8,6 +8,7 @@ import {
   registerGoogleFeature,
   type RegisterGoogleFeatureOptions,
 } from './google/google-feature'
+import { registerResponsePolicy } from './security/response-policy'
 import { registerShareFeature } from './shares/share-feature'
 
 export const LOGGER_REDACTION_PATHS = [
@@ -15,6 +16,15 @@ export const LOGGER_REDACTION_PATHS = [
   'req.headers.cookie',
   'req.headers.x-csrf-token',
   'req.headers.x-goog-channel-token',
+  'req.headers.x-goog-resource-id',
+  'req.body.code',
+  'req.body.password',
+  'req.body.token',
+  'req.originalUrl',
+  'req.params.token',
+  'req.query.code',
+  'req.query.state',
+  'req.raw.url',
   'req.url',
   'res.headers.set-cookie',
 ] as const
@@ -28,6 +38,7 @@ interface BuildServerOptions {
   readonly logLevel?: RuntimeConfig['logLevel']
   readonly secureCookies?: boolean
   readonly timeZone?: string
+  readonly trustProxy?: string
   readonly google?: Omit<
     RegisterGoogleFeatureOptions,
     'appBaseUrl' | 'database' | 'secureCookie'
@@ -36,6 +47,7 @@ interface BuildServerOptions {
 
 export async function buildServer(options: BuildServerOptions) {
   const app = Fastify({
+    bodyLimit: 64 * 1024,
     logger: options.logger
       ? {
           level: options.logLevel ?? 'info',
@@ -45,6 +57,26 @@ export async function buildServer(options: BuildServerOptions) {
           },
         }
       : false,
+    requestTimeout: 15_000,
+    trustProxy: options.trustProxy ?? false,
+  })
+
+  registerResponsePolicy(app, {
+    secureTransport: options.secureCookies ?? false,
+  })
+
+  app.setErrorHandler((error, request, reply) => {
+    const statusCode = safeStatusCode(error)
+    if (statusCode >= 500) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : 'UnknownError' },
+        'Request failed without exposing internal details',
+      )
+      return reply.code(500).send({ code: 'INTERNAL_ERROR' })
+    }
+    return reply
+      .code(statusCode)
+      .send({ code: statusCode === 413 ? 'REQUEST_TOO_LARGE' : 'INVALID_REQUEST' })
   })
 
   app.decorate('database', options.database)
@@ -63,7 +95,7 @@ export async function buildServer(options: BuildServerOptions) {
   })
   app.get('/api/v1/meta', async () => ({
     name: '캘공',
-    phase: 'admin-dashboard',
+    phase: 'security-hardening',
   }))
 
   await registerAdminAuth(app, {
@@ -110,4 +142,18 @@ export async function buildServer(options: BuildServerOptions) {
   }
 
   return app
+}
+
+function safeStatusCode(error: unknown): number {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'statusCode' in error &&
+    typeof error.statusCode === 'number' &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500
+  ) {
+    return error.statusCode
+  }
+  return 500
 }
