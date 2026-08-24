@@ -1,0 +1,1256 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "f8248739-52f3-4a31-b4f7-382bc73bda04",
+  "prevId": "63dd712f-4c1e-436f-8315-44dd98357c84",
+  "tables": {
+    "admin_sessions": {
+      "name": "admin_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "admin_sessions_token_hash_unique": {
+          "name": "admin_sessions_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "admin_sessions_expiry_idx": {
+          "name": "admin_sessions_expiry_idx",
+          "columns": [
+            "expires_at",
+            "revoked_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "admin_sessions_expiry": {
+          "name": "admin_sessions_expiry",
+          "value": "\"admin_sessions\".\"expires_at\" > \"admin_sessions\".\"created_at\""
+        },
+        "admin_sessions_last_used": {
+          "name": "admin_sessions_last_used",
+          "value": "\"admin_sessions\".\"last_used_at\" >= \"admin_sessions\".\"created_at\" and \"admin_sessions\".\"last_used_at\" <= \"admin_sessions\".\"expires_at\""
+        },
+        "admin_sessions_revoked": {
+          "name": "admin_sessions_revoked",
+          "value": "\"admin_sessions\".\"revoked_at\" is null or \"admin_sessions\".\"revoked_at\" >= \"admin_sessions\".\"created_at\""
+        }
+      }
+    },
+    "calendars": {
+      "name": "calendars",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "google_calendar_id": {
+          "name": "google_calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "sync_token": {
+          "name": "sync_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sync_status": {
+          "name": "sync_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'NEVER'"
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_sync_error_code": {
+          "name": "last_sync_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sync_window_start_date": {
+          "name": "sync_window_start_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sync_window_end_date": {
+          "name": "sync_window_end_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "calendars_connection_google_id_unique": {
+          "name": "calendars_connection_google_id_unique",
+          "columns": [
+            "connection_id",
+            "google_calendar_id"
+          ],
+          "isUnique": true
+        },
+        "calendars_active_idx": {
+          "name": "calendars_active_idx",
+          "columns": [
+            "connection_id",
+            "is_active"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "calendars_connection_id_google_connections_id_fk": {
+          "name": "calendars_connection_id_google_connections_id_fk",
+          "tableFrom": "calendars",
+          "tableTo": "google_connections",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "calendars_sync_status": {
+          "name": "calendars_sync_status",
+          "value": "\"calendars\".\"sync_status\" in ('NEVER', 'SYNCING', 'READY', 'ERROR')"
+        },
+        "calendars_is_primary": {
+          "name": "calendars_is_primary",
+          "value": "\"calendars\".\"is_primary\" in (0, 1)"
+        },
+        "calendars_is_active": {
+          "name": "calendars_is_active",
+          "value": "\"calendars\".\"is_active\" in (0, 1)"
+        }
+      }
+    },
+    "events": {
+      "name": "events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "google_event_id": {
+          "name": "google_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'CONFIRMED'"
+        },
+        "etag": {
+          "name": "etag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "google_updated_at": {
+          "name": "google_updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "is_all_day": {
+          "name": "is_all_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "start_time_zone": {
+          "name": "start_time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "end_time_zone": {
+          "name": "end_time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recurring_event_google_id": {
+          "name": "recurring_event_google_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "original_starts_at": {
+          "name": "original_starts_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "original_start_date": {
+          "name": "original_start_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'DEFAULT'"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "events_calendar_google_id_unique": {
+          "name": "events_calendar_google_id_unique",
+          "columns": [
+            "calendar_id",
+            "google_event_id"
+          ],
+          "isUnique": true
+        },
+        "events_calendar_time_idx": {
+          "name": "events_calendar_time_idx",
+          "columns": [
+            "calendar_id",
+            "starts_at",
+            "ends_at"
+          ],
+          "isUnique": false
+        },
+        "events_calendar_date_idx": {
+          "name": "events_calendar_date_idx",
+          "columns": [
+            "calendar_id",
+            "start_date",
+            "end_date"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "events_calendar_id_calendars_id_fk": {
+          "name": "events_calendar_id_calendars_id_fk",
+          "tableFrom": "events",
+          "tableTo": "calendars",
+          "columnsFrom": [
+            "calendar_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "events_status": {
+          "name": "events_status",
+          "value": "\"events\".\"status\" in ('CONFIRMED', 'TENTATIVE', 'CANCELLED')"
+        },
+        "events_visibility": {
+          "name": "events_visibility",
+          "value": "\"events\".\"visibility\" in ('DEFAULT', 'PUBLIC', 'PRIVATE', 'CONFIDENTIAL')"
+        },
+        "events_is_all_day": {
+          "name": "events_is_all_day",
+          "value": "\"events\".\"is_all_day\" in (0, 1)"
+        },
+        "events_time_shape": {
+          "name": "events_time_shape",
+          "value": "(\n        \"events\".\"is_all_day\" = 0\n        and \"events\".\"starts_at\" is not null\n        and \"events\".\"ends_at\" is not null\n        and \"events\".\"ends_at\" > \"events\".\"starts_at\"\n        and \"events\".\"start_date\" is null\n        and \"events\".\"end_date\" is null\n      ) or (\n        \"events\".\"is_all_day\" = 1\n        and \"events\".\"starts_at\" is null\n        and \"events\".\"ends_at\" is null\n        and \"events\".\"start_date\" is not null\n        and \"events\".\"end_date\" is not null\n        and length(\"events\".\"start_date\") = 10\n        and length(\"events\".\"end_date\") = 10\n        and \"events\".\"start_date\" = date(\"events\".\"start_date\")\n        and \"events\".\"end_date\" = date(\"events\".\"end_date\")\n        and \"events\".\"end_date\" > \"events\".\"start_date\"\n      )"
+        },
+        "events_original_start_shape": {
+          "name": "events_original_start_shape",
+          "value": "\"events\".\"original_starts_at\" is null or \"events\".\"original_start_date\" is null"
+        },
+        "events_private_details": {
+          "name": "events_private_details",
+          "value": "\"events\".\"visibility\" <> 'PRIVATE' or (\n        \"events\".\"title\" is null\n        and \"events\".\"location\" is null\n        and \"events\".\"description\" is null\n      )"
+        }
+      }
+    },
+    "google_connections": {
+      "name": "google_connections",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'DISCONNECTED'"
+        },
+        "refresh_token_ciphertext": {
+          "name": "refresh_token_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scopes_json": {
+          "name": "scopes_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "connected_at": {
+          "name": "connected_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "calendar_list_sync_token": {
+          "name": "calendar_list_sync_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "google_connections_singleton": {
+          "name": "google_connections_singleton",
+          "value": "\"google_connections\".\"id\" = 1"
+        },
+        "google_connections_status": {
+          "name": "google_connections_status",
+          "value": "\"google_connections\".\"status\" in ('DISCONNECTED', 'CONNECTED', 'ERROR')"
+        },
+        "google_connections_connected_token": {
+          "name": "google_connections_connected_token",
+          "value": "\"google_connections\".\"status\" <> 'CONNECTED' or \"google_connections\".\"refresh_token_ciphertext\" is not null"
+        }
+      }
+    },
+    "share_calendars": {
+      "name": "share_calendars",
+      "columns": {
+        "share_id": {
+          "name": "share_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "share_calendars_calendar_idx": {
+          "name": "share_calendars_calendar_idx",
+          "columns": [
+            "calendar_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "share_calendars_share_id_share_links_id_fk": {
+          "name": "share_calendars_share_id_share_links_id_fk",
+          "tableFrom": "share_calendars",
+          "tableTo": "share_links",
+          "columnsFrom": [
+            "share_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "share_calendars_calendar_id_calendars_id_fk": {
+          "name": "share_calendars_calendar_id_calendars_id_fk",
+          "tableFrom": "share_calendars",
+          "tableTo": "calendars",
+          "columnsFrom": [
+            "calendar_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "share_calendars_primary_key": {
+          "columns": [
+            "share_id",
+            "calendar_id"
+          ],
+          "name": "share_calendars_primary_key"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "share_links": {
+      "name": "share_links",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calendar_scope": {
+          "name": "calendar_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ALL'"
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_start_date": {
+          "name": "event_start_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_end_date": {
+          "name": "event_end_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "access_starts_at": {
+          "name": "access_starts_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "access_ends_at": {
+          "name": "access_ends_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "share_links_token_hash_unique": {
+          "name": "share_links_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "share_links_access_idx": {
+          "name": "share_links_access_idx",
+          "columns": [
+            "revoked_at",
+            "access_ends_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "share_links_name": {
+          "name": "share_links_name",
+          "value": "length(trim(\"share_links\".\"name\")) > 0"
+        },
+        "share_links_calendar_scope": {
+          "name": "share_links_calendar_scope",
+          "value": "\"share_links\".\"calendar_scope\" in ('ALL', 'SELECTED')"
+        },
+        "share_links_event_date_range": {
+          "name": "share_links_event_date_range",
+          "value": "length(\"share_links\".\"event_start_date\") = 10\n        and length(\"share_links\".\"event_end_date\") = 10\n        and \"share_links\".\"event_start_date\" = date(\"share_links\".\"event_start_date\")\n        and \"share_links\".\"event_end_date\" = date(\"share_links\".\"event_end_date\")\n        and \"share_links\".\"event_end_date\" >= \"share_links\".\"event_start_date\""
+        },
+        "share_links_access_range": {
+          "name": "share_links_access_range",
+          "value": "(\n        \"share_links\".\"access_starts_at\" is null and \"share_links\".\"access_ends_at\" is null\n      ) or (\n        \"share_links\".\"access_starts_at\" is not null\n        and \"share_links\".\"access_ends_at\" is not null\n        and \"share_links\".\"access_ends_at\" > \"share_links\".\"access_starts_at\"\n      )"
+        }
+      }
+    },
+    "sync_jobs": {
+      "name": "sync_jobs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'PENDING'"
+        },
+        "payload_json": {
+          "name": "payload_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 8
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "locked_at": {
+          "name": "locked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error_category": {
+          "name": "last_error_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "sync_jobs_active_dedupe_unique": {
+          "name": "sync_jobs_active_dedupe_unique",
+          "columns": [
+            "dedupe_key"
+          ],
+          "isUnique": true,
+          "where": "\"sync_jobs\".\"status\" in ('PENDING', 'RUNNING', 'RETRY')"
+        },
+        "sync_jobs_dequeue_idx": {
+          "name": "sync_jobs_dequeue_idx",
+          "columns": [
+            "status",
+            "next_attempt_at"
+          ],
+          "isUnique": false
+        },
+        "sync_jobs_calendar_idx": {
+          "name": "sync_jobs_calendar_idx",
+          "columns": [
+            "calendar_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "sync_jobs_connection_id_google_connections_id_fk": {
+          "name": "sync_jobs_connection_id_google_connections_id_fk",
+          "tableFrom": "sync_jobs",
+          "tableTo": "google_connections",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sync_jobs_calendar_id_calendars_id_fk": {
+          "name": "sync_jobs_calendar_id_calendars_id_fk",
+          "tableFrom": "sync_jobs",
+          "tableTo": "calendars",
+          "columnsFrom": [
+            "calendar_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "sync_jobs_kind": {
+          "name": "sync_jobs_kind",
+          "value": "\"sync_jobs\".\"kind\" in (\n        'CALENDAR_LIST_SYNC',\n        'CALENDAR_EVENTS_SYNC',\n        'CALENDAR_WINDOW_SYNC',\n        'WATCH_RENEWAL',\n        'RECOVERY_SYNC'\n      )"
+        },
+        "sync_jobs_status": {
+          "name": "sync_jobs_status",
+          "value": "\"sync_jobs\".\"status\" in ('PENDING', 'RUNNING', 'RETRY', 'SUCCEEDED', 'FAILED')"
+        },
+        "sync_jobs_attempts": {
+          "name": "sync_jobs_attempts",
+          "value": "\"sync_jobs\".\"attempt_count\" >= 0\n        and \"sync_jobs\".\"max_attempts\" > 0\n        and \"sync_jobs\".\"attempt_count\" <= \"sync_jobs\".\"max_attempts\""
+        },
+        "sync_jobs_locked_state": {
+          "name": "sync_jobs_locked_state",
+          "value": "(\"sync_jobs\".\"status\" = 'RUNNING' and \"sync_jobs\".\"locked_at\" is not null)\n        or (\"sync_jobs\".\"status\" <> 'RUNNING')"
+        },
+        "sync_jobs_finished_state": {
+          "name": "sync_jobs_finished_state",
+          "value": "(\"sync_jobs\".\"status\" in ('SUCCEEDED', 'FAILED') and \"sync_jobs\".\"finished_at\" is not null)\n        or (\"sync_jobs\".\"status\" not in ('SUCCEEDED', 'FAILED') and \"sync_jobs\".\"finished_at\" is null)"
+        }
+      }
+    },
+    "visitor_sessions": {
+      "name": "visitor_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "share_id": {
+          "name": "share_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "visitor_sessions_token_hash_unique": {
+          "name": "visitor_sessions_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "visitor_sessions_share_idx": {
+          "name": "visitor_sessions_share_idx",
+          "columns": [
+            "share_id"
+          ],
+          "isUnique": false
+        },
+        "visitor_sessions_expiry_idx": {
+          "name": "visitor_sessions_expiry_idx",
+          "columns": [
+            "expires_at",
+            "revoked_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "visitor_sessions_share_id_share_links_id_fk": {
+          "name": "visitor_sessions_share_id_share_links_id_fk",
+          "tableFrom": "visitor_sessions",
+          "tableTo": "share_links",
+          "columnsFrom": [
+            "share_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "visitor_sessions_expiry": {
+          "name": "visitor_sessions_expiry",
+          "value": "\"visitor_sessions\".\"expires_at\" > \"visitor_sessions\".\"created_at\""
+        },
+        "visitor_sessions_last_used": {
+          "name": "visitor_sessions_last_used",
+          "value": "\"visitor_sessions\".\"last_used_at\" >= \"visitor_sessions\".\"created_at\" and \"visitor_sessions\".\"last_used_at\" <= \"visitor_sessions\".\"expires_at\""
+        },
+        "visitor_sessions_revoked": {
+          "name": "visitor_sessions_revoked",
+          "value": "\"visitor_sessions\".\"revoked_at\" is null or \"visitor_sessions\".\"revoked_at\" >= \"visitor_sessions\".\"created_at\""
+        }
+      }
+    },
+    "watch_channels": {
+      "name": "watch_channels",
+      "columns": {
+        "channel_id": {
+          "name": "channel_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "verification_token_hash": {
+          "name": "verification_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_message_number": {
+          "name": "last_message_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stopped_at": {
+          "name": "stopped_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "watch_channels_resource_idx": {
+          "name": "watch_channels_resource_idx",
+          "columns": [
+            "resource_id"
+          ],
+          "isUnique": false
+        },
+        "watch_channels_expiry_idx": {
+          "name": "watch_channels_expiry_idx",
+          "columns": [
+            "stopped_at",
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "watch_channels_connection_id_google_connections_id_fk": {
+          "name": "watch_channels_connection_id_google_connections_id_fk",
+          "tableFrom": "watch_channels",
+          "tableTo": "google_connections",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "watch_channels_calendar_id_calendars_id_fk": {
+          "name": "watch_channels_calendar_id_calendars_id_fk",
+          "tableFrom": "watch_channels",
+          "tableTo": "calendars",
+          "columnsFrom": [
+            "calendar_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "watch_channels_kind": {
+          "name": "watch_channels_kind",
+          "value": "\"watch_channels\".\"kind\" in ('CALENDAR_LIST', 'EVENTS')"
+        },
+        "watch_channels_target": {
+          "name": "watch_channels_target",
+          "value": "(\"watch_channels\".\"kind\" = 'CALENDAR_LIST' and \"watch_channels\".\"calendar_id\" is null)\n        or (\"watch_channels\".\"kind\" = 'EVENTS' and \"watch_channels\".\"calendar_id\" is not null)"
+        },
+        "watch_channels_expiry": {
+          "name": "watch_channels_expiry",
+          "value": "\"watch_channels\".\"expires_at\" > \"watch_channels\".\"created_at\""
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

@@ -7,6 +7,7 @@ import { buildServer } from './app'
 import { loadAdminAuthSecrets } from './auth/config'
 import { ConfigurationError, loadRuntimeConfig } from './config'
 import { databaseFilePath, openDatabase } from './db/database'
+import { loadGoogleSecrets } from './google/config'
 
 async function main() {
   if (
@@ -18,6 +19,7 @@ async function main() {
 
   const runtime = loadRuntimeConfig()
   const adminAuth = loadAdminAuthSecrets()
+  const googleSecrets = loadGoogleSecrets()
   const publicDir =
     runtime.nodeEnv === 'production'
       ? resolve(fileURLToPath(new URL('../client', import.meta.url)))
@@ -31,6 +33,11 @@ async function main() {
       adminAuth,
       appBaseUrl: runtime.appBaseUrl,
       database,
+      google: {
+        ...googleSecrets,
+        schedulerEnabled: true,
+        timeZone: runtime.appTimeZone,
+      },
       ...(publicDir ? { publicDir } : {}),
       logger: true,
       logLevel: runtime.logLevel,

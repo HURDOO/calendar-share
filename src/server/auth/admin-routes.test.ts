@@ -201,6 +201,7 @@ describe('administrator authentication routes', () => {
         'req.headers.authorization',
         'req.headers.cookie',
         'req.headers.x-csrf-token',
+        'req.headers.x-goog-channel-token',
         'res.headers.set-cookie',
       ]),
     )

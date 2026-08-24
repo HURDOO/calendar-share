@@ -50,7 +50,7 @@ describe('SQLite database foundation', () => {
       .prepare('select count(*) as count from __drizzle_migrations')
       .get() as { count: number }
 
-    expect(before.count).toBe(1)
+    expect(before.count).toBeGreaterThanOrEqual(1)
     expect(after.count).toBe(before.count)
   })
 

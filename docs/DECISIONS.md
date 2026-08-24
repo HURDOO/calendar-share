@@ -119,3 +119,11 @@
 - 결정: 로그인마다 256비트 token을 발급하고 DB에는 SHA-256 hash만 저장한다. 운영 쿠키는 Secure/HttpOnly/SameSite=Lax/Path=/, 유휴 만료 30분, 절대 만료 8시간이다. 상태 변경은 정확한 Origin과 세션 ID에 HMAC으로 결합한 CSRF header를 모두 검증한다. 로컬 HTTP에서만 Secure 속성을 끈다.
 - 고려한 대안: stateless JWT, 암호화 cookie session, SameSite만 사용, CSRF cookie, 무기한 세션.
 - 결과와 트레이드오프: 즉시 서버 폐기와 명확한 만료가 가능하고 CSRF token을 브라우저 저장소에 영속화하지 않는다. 매 인증 요청에 SQLite 조회·갱신이 발생하며 프로세스 재시작 뒤 로그인 rate-limit 기록은 초기화된다.
+
+## 2026-08-25: Google token과 동기화 상태의 로컬 보안 경계
+
+- 상태: 승인
+- 맥락: 단일 프로세스가 OAuth callback, Google API 호출, webhook과 재시도 작업을 처리하되 원문 refresh token과 이벤트 원문 노출을 최소화해야 한다.
+- 결정: OAuth transaction은 AES-256-GCM 암호화 쿠키에 두고 state, S256 PKCE verifier, 관리자 session ID, 10분 만료를 함께 검증한다. refresh token도 목적별 AAD를 둔 AES-256-GCM 암호문으로만 SQLite에 저장한다. Google API는 공식 Node client 뒤의 최소 adapter 계약으로 격리하며 webhook에는 token hash만 저장하고 durable 작업 큐에 변경 힌트만 등록한다.
+- 고려한 대안: 평문 refresh token DB 저장, access token 영속화, webhook 수신 중 즉시 Google API 호출, 네트워크가 필요한 통합 테스트.
+- 결과와 트레이드오프: DB 또는 로그만 유출됐을 때 원문 자격 증명 노출을 줄이고 fake adapter로 오류·페이지 경계를 결정적으로 검증할 수 있다. 암호화 키 유실 시 기존 연결을 복구할 수 없으므로 재연결이 필요하며 키 회전 절차는 운영 준비 작업에서 다룬다.

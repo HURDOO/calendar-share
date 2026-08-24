@@ -27,6 +27,7 @@ export const googleConnections = sqliteTable(
       .default(sql`'[]'`),
     connectedAt: integer('connected_at', { mode: 'timestamp_ms' }),
     lastSyncedAt: integer('last_synced_at', { mode: 'timestamp_ms' }),
+    calendarListSyncToken: text('calendar_list_sync_token'),
     lastErrorCode: text('last_error_code'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' })
       .notNull()
@@ -69,6 +70,8 @@ export const calendars = sqliteTable(
       .default('NEVER'),
     lastSyncedAt: integer('last_synced_at', { mode: 'timestamp_ms' }),
     lastSyncErrorCode: text('last_sync_error_code'),
+    syncWindowStartDate: text('sync_window_start_date'),
+    syncWindowEndDate: text('sync_window_end_date'),
     deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' })
       .notNull()

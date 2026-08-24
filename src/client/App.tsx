@@ -16,11 +16,11 @@ export function App() {
         <dl className="status-list">
           <div>
             <dt>현재 단계</dt>
-            <dd>관리자 인증</dd>
+            <dd>Google Calendar 연동</dd>
           </div>
           <div>
             <dt>다음 단계</dt>
-            <dd>Google Calendar 연결</dd>
+            <dd>공유 정책 관리</dd>
           </div>
         </dl>
       </section>

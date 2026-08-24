@@ -33,14 +33,15 @@
 - 완료 조건: 정상·오류·만료·폐기·CSRF·반복 실패 테스트가 통과하고 쿠키 속성과 로그 redaction이 검증된다.
 - 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(30개), `pnpm build`, `pnpm test:e2e` 통과. 정상·오류 로그인, 정확한 Origin, IP별 반복 실패, HttpOnly/Secure/SameSite 쿠키, DB token hash, 30분 유휴·8시간 절대 만료, logout 폐기, session-bound CSRF와 로그 redaction을 검증했다.
 
-## [>] T-005 Google OAuth와 동기화 수직 흐름 구현
+## [x] T-005 Google OAuth와 동기화 수직 흐름 구현
 
 - 범위: OAuth 연결, token 암호화, CalendarList/Events 초기 및 증분 sync, 매일 ±3개월 window 교체, 삭제/반복 일정, CalendarList/Events watch webhook, durable job, 채널 갱신과 복구 sync를 구현한다.
 - 선행 조건: T-003, Google Cloud 테스트 자격 증명 또는 fake adapter 계약.
 - 산출물: Google adapter, sync/watch/job 모듈, 관리자 연결 상태 API, fixture 기반 통합 테스트.
 - 완료 조건: 페이지네이션, 변경·삭제, 410, 429/5xx, 중복 webhook, 채널 만료, 날짜 경계 window 이동 테스트가 통과하고 같은 이벤트가 중복 저장되지 않는다. 실패한 window 교체는 기존 snapshot을 보존한다.
+- 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(61개), `pnpm build`, `pnpm test:e2e`(Chromium 2개) 통과. PKCE/state/session-bound OAuth, AES-256-GCM refresh token 저장, 최소 읽기 scope, CalendarList/Events 페이지네이션·증분·삭제·중복 제거·410 복구, private 마스킹, 종일/반복 일정, ±3개월 window 원자 교체, 429/5xx backoff, durable queue, 검증된 webhook과 watch 갱신을 fake adapter로 검증했다.
 
-## [ ] T-006 공유 정책과 관리 API 구현
+## [>] T-006 공유 정책과 관리 API 구현
 
 - 범위: 이름·`ALL`/`SELECTED` 캘린더 범위·일정 범위·접근 시간의 CRUD, token 발급/해시, 폐기, 단일 정책 평가기를 구현한다.
 - 선행 조건: T-003, T-004, 승인된 공유 경계.

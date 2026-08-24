@@ -4,11 +4,16 @@ import Fastify from 'fastify'
 import { registerAdminAuth, type RegisterAdminAuthOptions } from './auth/admin-routes'
 import type { RuntimeConfig } from './config'
 import type { AppDatabase } from './db/database'
+import {
+  registerGoogleFeature,
+  type RegisterGoogleFeatureOptions,
+} from './google/google-feature'
 
 export const LOGGER_REDACTION_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers.x-csrf-token',
+  'req.headers.x-goog-channel-token',
   'req.url',
   'res.headers.set-cookie',
 ] as const
@@ -21,6 +26,10 @@ interface BuildServerOptions {
   readonly logger?: boolean
   readonly logLevel?: RuntimeConfig['logLevel']
   readonly secureCookies?: boolean
+  readonly google?: Omit<
+    RegisterGoogleFeatureOptions,
+    'appBaseUrl' | 'database' | 'secureCookie'
+  >
 }
 
 export async function buildServer(options: BuildServerOptions) {
@@ -60,6 +69,15 @@ export async function buildServer(options: BuildServerOptions) {
     appBaseUrl: options.appBaseUrl,
     secureCookie: options.secureCookies ?? false,
   })
+
+  if (options.google) {
+    await registerGoogleFeature(app, {
+      ...options.google,
+      appBaseUrl: options.appBaseUrl,
+      database: options.database,
+      secureCookie: options.secureCookies ?? false,
+    })
+  }
 
   if (options.publicDir) {
     await app.register(fastifyStatic, {

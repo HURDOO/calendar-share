@@ -16,8 +16,8 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByRole('heading', { name: '캘공' })).toBeInTheDocument()
-    expect(screen.getByText('관리자 인증')).toBeInTheDocument()
-    expect(screen.getByText('Google Calendar 연결')).toBeInTheDocument()
+    expect(screen.getByText('Google Calendar 연동')).toBeInTheDocument()
+    expect(screen.getByText('공유 정책 관리')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /관리자/ })).not.toBeInTheDocument()
   })
 
@@ -35,6 +35,17 @@ describe('App', () => {
           expiresAt: '2026-08-25T08:00:00.000Z',
         }),
       } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          connected: false,
+          lastErrorCode: null,
+          lastSyncedAt: null,
+          calendars: { active: 0, ready: 0 },
+          queue: {},
+        }),
+      } as Response)
     vi.stubGlobal('fetch', fetchMock)
 
     render(<App />)
@@ -44,7 +55,10 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('button', { name: '로그인' }))
 
     expect(await screen.findByRole('heading', { name: '관리자 대시보드' })).toBeInTheDocument()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(
+      await screen.findByRole('button', { name: 'Google 계정 연결' }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: 'POST',
       credentials: 'same-origin',

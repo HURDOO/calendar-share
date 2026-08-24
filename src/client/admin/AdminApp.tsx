@@ -6,16 +6,31 @@ interface SessionResponse {
   readonly expiresAt: string
 }
 
+interface GoogleStatusResponse {
+  readonly connected: boolean
+  readonly lastErrorCode: string | null
+  readonly lastSyncedAt: string | null
+  readonly calendars: { readonly active: number; readonly ready: number }
+  readonly queue: Record<string, number>
+}
+
 type SessionState =
   | { readonly status: 'loading' }
   | { readonly status: 'anonymous' }
   | { readonly status: 'authenticated'; readonly csrfToken: string }
+
+type GoogleState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading' }
+  | { readonly status: 'unavailable' }
+  | { readonly status: 'ready'; readonly value: GoogleStatusResponse }
 
 export function AdminApp() {
   const [session, setSession] = useState<SessionState>({ status: 'loading' })
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [google, setGoogle] = useState<GoogleState>({ status: 'idle' })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -49,6 +64,38 @@ export function AdminApp() {
 
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    if (session.status !== 'authenticated') {
+      setGoogle({ status: 'idle' })
+      return
+    }
+
+    const controller = new AbortController()
+    setGoogle({ status: 'loading' })
+    void fetch('/api/v1/admin/google/status', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('google-status-failed')
+        }
+        setGoogle({
+          status: 'ready',
+          value: (await response.json()) as GoogleStatusResponse,
+        })
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+        setGoogle({ status: 'unavailable' })
+      })
+
+    return () => controller.abort()
+  }, [session.status])
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -112,6 +159,89 @@ export function AdminApp() {
     }
   }
 
+  async function handleGoogleConnect() {
+    if (session.status !== 'authenticated') {
+      return
+    }
+
+    setSubmitting(true)
+    setMessage('')
+    try {
+      const response = await fetch('/api/v1/admin/google/connect', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': session.csrfToken },
+      })
+      if (!response.ok) {
+        setMessage('Google 연결을 시작하지 못했습니다.')
+        return
+      }
+      const body = (await response.json()) as { authorizationUrl: string }
+      window.location.assign(body.authorizationUrl)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleGoogleSync() {
+    if (session.status !== 'authenticated') {
+      return
+    }
+
+    setSubmitting(true)
+    setMessage('')
+    try {
+      const response = await fetch('/api/v1/admin/google/sync', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': session.csrfToken },
+      })
+      setMessage(
+        response.ok
+          ? '복구 동기화를 요청했습니다.'
+          : '동기화를 요청하지 못했습니다.',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleGoogleDisconnect() {
+    if (
+      session.status !== 'authenticated' ||
+      !window.confirm('Google Calendar 연결과 로컬 일정 데이터를 제거할까요?')
+    ) {
+      return
+    }
+
+    setSubmitting(true)
+    setMessage('')
+    try {
+      const response = await fetch('/api/v1/admin/google/connection', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': session.csrfToken },
+      })
+      if (!response.ok) {
+        setMessage('Google 연결을 해제하지 못했습니다.')
+        return
+      }
+      setGoogle({
+        status: 'ready',
+        value: {
+          connected: false,
+          lastErrorCode: null,
+          lastSyncedAt: null,
+          calendars: { active: 0, ready: 0 },
+          queue: {},
+        },
+      })
+      setMessage('Google Calendar 연결을 해제했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   if (session.status === 'loading') {
     return (
       <main className="app-shell">
@@ -141,9 +271,74 @@ export function AdminApp() {
         </header>
 
         <section className="admin-panel" aria-labelledby="connection-title">
-          <p className="panel-kicker">보호된 관리자 영역</p>
-          <h2 id="connection-title">Google Calendar 연결 준비</h2>
-          <p>관리자 인증이 완료되었습니다. 다음 단계에서 읽기 전용 연결을 추가합니다.</p>
+          <p className="panel-kicker">읽기 전용 연동</p>
+          <h2 id="connection-title">Google Calendar</h2>
+          {google.status === 'loading' || google.status === 'idle' ? (
+            <p role="status">연결 상태를 확인하고 있습니다.</p>
+          ) : google.status === 'unavailable' ? (
+            <p role="alert">연결 상태를 불러오지 못했습니다.</p>
+          ) : google.value.connected ? (
+            <>
+              <dl className="connection-status">
+                <div>
+                  <dt>상태</dt>
+                  <dd>{google.value.lastErrorCode ? '확인 필요' : '연결됨'}</dd>
+                </div>
+                <div>
+                  <dt>캘린더</dt>
+                  <dd>
+                    {google.value.calendars.ready}/{google.value.calendars.active} 동기화
+                  </dd>
+                </div>
+                <div>
+                  <dt>마지막 동기화</dt>
+                  <dd>{formatDateTime(google.value.lastSyncedAt)}</dd>
+                </div>
+                <div>
+                  <dt>대기 작업</dt>
+                  <dd>{google.value.queue.PENDING ?? 0}</dd>
+                </div>
+              </dl>
+              {google.value.lastErrorCode ? (
+                <p className="inline-warning">
+                  오류 코드: {google.value.lastErrorCode}
+                </p>
+              ) : null}
+              <div className="button-row">
+                <button
+                  className="primary-button"
+                  disabled={submitting}
+                  onClick={() => void handleGoogleSync()}
+                  type="button"
+                >
+                  지금 동기화
+                </button>
+                <button
+                  className="danger-button"
+                  disabled={submitting}
+                  onClick={() => void handleGoogleDisconnect()}
+                  type="button"
+                >
+                  연결 해제
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                캘린더 목록과 일정만 읽습니다. 캘린더에 일정을 쓰거나 수정하지
+                않습니다.
+              </p>
+              <button
+                className="primary-button"
+                disabled={submitting}
+                onClick={() => void handleGoogleConnect()}
+                type="button"
+              >
+                Google 계정 연결
+              </button>
+            </>
+          )}
         </section>
 
         {message ? (
@@ -186,4 +381,15 @@ export function AdminApp() {
       </section>
     </main>
   )
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return '아직 없음'
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }
