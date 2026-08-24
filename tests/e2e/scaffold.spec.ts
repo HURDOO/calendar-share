@@ -4,7 +4,7 @@ test('shows the public project status without an admin link', async ({ page }) =
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: '캘공' })).toBeVisible()
-  await expect(page.getByText('Google Calendar 연동')).toBeVisible()
+  await expect(page.getByText('공유 링크 열기')).toBeVisible()
   await expect(page.getByRole('link', { name: /관리자/ })).toHaveCount(0)
 })
 

@@ -8,6 +8,7 @@ export class GoogleSyncWorker {
     private readonly queue: SyncJobQueue,
     private readonly sync: GoogleSyncService,
     private readonly watch: GoogleWatchService,
+    private readonly onEventsChanged: () => void = () => undefined,
   ) {}
 
   async runOnce(): Promise<boolean> {
@@ -19,6 +20,13 @@ export class GoogleSyncWorker {
     try {
       await this.execute(job)
       this.queue.succeed(job.id)
+      if (
+        job.kind === 'CALENDAR_EVENTS_SYNC' ||
+        job.kind === 'CALENDAR_WINDOW_SYNC' ||
+        job.kind === 'RECOVERY_SYNC'
+      ) {
+        this.onEventsChanged()
+      }
     } catch (error) {
       const failure = classifyWorkerError(error)
       this.queue.fail(job, failure.category, failure.retryable)

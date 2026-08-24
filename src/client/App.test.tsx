@@ -16,8 +16,8 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByRole('heading', { name: '캘공' })).toBeInTheDocument()
-    expect(screen.getByText('Google Calendar 연동')).toBeInTheDocument()
-    expect(screen.getByText('공유 정책 관리')).toBeInTheDocument()
+    expect(screen.getByText('공유 링크 열기')).toBeInTheDocument()
+    expect(screen.getByText('허용된 일정만')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /관리자/ })).not.toBeInTheDocument()
   })
 

@@ -42,6 +42,7 @@ export interface RegisterGoogleFeatureOptions extends GoogleSecrets {
   readonly adapter?: GoogleAdapter
   readonly now?: () => Date
   readonly schedulerEnabled?: boolean
+  readonly onEventsChanged?: () => void
 }
 
 export async function registerGoogleFeature(
@@ -78,7 +79,12 @@ export async function registerGoogleFeature(
     now,
   )
   const oauth = new GoogleOAuthService(adapter, connection, cipher, now)
-  const worker = new GoogleSyncWorker(queue, sync, watch)
+  const worker = new GoogleSyncWorker(
+    queue,
+    sync,
+    watch,
+    options.onEventsChanged,
+  )
 
   const context: GoogleFeatureContext = {
     connection,

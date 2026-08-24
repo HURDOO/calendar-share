@@ -102,7 +102,12 @@ export async function registerShareRoutes(
       return reply.code(400).send({ code: 'INVALID_REQUEST' })
     }
     try {
-      return { share: app.shareFeature.shares.update(parsedParams.data.id, parsedBody.data) }
+      const share = app.shareFeature.shares.update(
+        parsedParams.data.id,
+        parsedBody.data,
+      )
+      app.shareFeature.realtime.publish(parsedParams.data.id)
+      return { share }
     } catch (error) {
       return sendShareError(error, reply)
     }
@@ -120,6 +125,7 @@ export async function registerShareRoutes(
     }
     try {
       app.shareFeature.shares.revoke(parsed.data.id)
+      app.shareFeature.realtime.publish(parsed.data.id)
       return reply.code(204).send()
     } catch (error) {
       return sendShareError(error, reply)
@@ -137,7 +143,9 @@ export async function registerShareRoutes(
       return reply.code(400).send({ code: 'INVALID_REQUEST' })
     }
     try {
-      return app.shareFeature.shares.rotateToken(parsed.data.id)
+      const result = app.shareFeature.shares.rotateToken(parsed.data.id)
+      app.shareFeature.realtime.publish(parsed.data.id)
+      return result
     } catch (error) {
       return sendShareError(error, reply)
     }
@@ -201,6 +209,64 @@ export async function registerShareRoutes(
       return reply.code(403).send({ code: 'SHARE_ACCESS_UNAVAILABLE' })
     }
     return result
+  })
+
+  app.get('/api/v1/public/stream', async (request, reply) => {
+    const token = request.cookies[VISITOR_SESSION_COOKIE]
+    const session = token
+      ? app.shareFeature.visitors.authenticate(token)
+      : null
+    if (!session) {
+      clearVisitorCookie(reply, options.secureCookie)
+      return reply.code(401).send({ code: 'SHARE_ACCESS_UNAVAILABLE' })
+    }
+    if (app.shareFeature.policy.evaluate(session.shareId).availability !== 'AVAILABLE') {
+      clearVisitorCookie(reply, options.secureCookie)
+      return reply.code(403).send({ code: 'SHARE_ACCESS_UNAVAILABLE' })
+    }
+
+    reply.hijack()
+    reply.raw.writeHead(200, {
+      'Cache-Control': 'no-store, no-transform',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Referrer-Policy': 'no-referrer',
+      Vary: 'Cookie',
+      'X-Accel-Buffering': 'no',
+      'X-Robots-Tag': 'noindex, nofollow',
+    })
+    reply.raw.write(': connected\n\n')
+
+    let closed = false
+    const cleanup = () => {
+      if (closed) {
+        return
+      }
+      closed = true
+      clearInterval(heartbeat)
+      unsubscribe()
+    }
+    const unsubscribe = app.shareFeature.realtime.subscribe(
+      session.shareId,
+      () => {
+        if (!closed) {
+          reply.raw.write('event: changed\ndata: {}\n\n')
+        }
+      },
+    )
+    const heartbeat = setInterval(() => {
+      const active = app.shareFeature.visitors.authenticate(token ?? '')
+      if (!active || active.shareId !== session.shareId) {
+        reply.raw.write('event: unavailable\ndata: {}\n\n')
+        reply.raw.end()
+        cleanup()
+        return
+      }
+      reply.raw.write(': keepalive\n\n')
+    }, 20_000)
+    heartbeat.unref()
+    reply.raw.on('close', cleanup)
+    return reply
   })
 }
 

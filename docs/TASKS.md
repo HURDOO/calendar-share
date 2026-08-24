@@ -49,14 +49,15 @@
 - 완료 조건: 캘린더·날짜·접근시간 모든 경계 조합에서 허용된 이벤트만 반환되고 폐기가 다음 요청부터 즉시 적용된다. 새 캘린더는 `ALL` 공유에만 자동 포함된다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(71개), `pnpm build`, `pnpm test:e2e`(Chromium 2개) 통과. 256비트 공유 token의 hash-only 저장과 1회 공개/회전, `ALL`/`SELECTED` 및 빈 allowlist, 미래 캘린더, 일정 날짜 겹침, 접근 시작 포함·종료 배타, private 대체 표시, 관리자 CRUD·미리보기, clean URL 방문자 세션, 회전·폐기 직후 차단을 실제 SQLite와 Fastify 통합 테스트로 검증했다.
 
-## [>] T-007 방문자 캘린더 핵심 흐름 구현
+## [x] T-007 방문자 캘린더 핵심 흐름 구현
 
 - 범위: `/s/:token` 교환, clean URL, 모바일 우선 일정 목록, 넓은 화면 달력, 빈/로딩/만료/오류 상태와 SSE 갱신을 구현한다.
 - 선행 조건: T-005, T-006.
 - 산출물: 공개 React 화면, public events/stream API, 반응형 스타일, E2E fixture.
 - 완료 조건: Kakao 인앱 브라우저 상당 viewport와 데스크톱 E2E에서 링크 열람·갱신이 동작하고 DOM에 관리자 링크가 없으며 범위 밖 데이터가 응답에 없다.
+- 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(79개), `pnpm build`, `pnpm test:e2e`(Chromium 4개) 통과. token URL의 clean redirect, 방문자 세션·공유 ID 결합, 모바일 390×844 날짜별 목록, 1280px 월간 달력, 로딩·빈·접근 불가·오류 상태, 실제 HTTP SSE 인증과 데이터 없는 갱신 신호, 성공한 Google event sync 후 refetch, 관리자 링크 부재를 검증했다.
 
-## [ ] T-008 관리자 공유 대시보드와 미리보기 구현
+## [>] T-008 관리자 공유 대시보드와 미리보기 구현
 
 - 범위: 연결 상태, 공유 목록, 생성/편집/폐기, 링크 복사, 실제 정책 기반 미리보기 UI를 구현한다.
 - 선행 조건: T-004, T-005, T-006, T-007의 공유 일정 컴포넌트.

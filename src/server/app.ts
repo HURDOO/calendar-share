@@ -63,7 +63,7 @@ export async function buildServer(options: BuildServerOptions) {
   })
   app.get('/api/v1/meta', async () => ({
     name: '캘공',
-    phase: 'share-policy',
+    phase: 'visitor-calendar',
   }))
 
   await registerAdminAuth(app, {
@@ -72,15 +72,6 @@ export async function buildServer(options: BuildServerOptions) {
     secureCookie: options.secureCookies ?? false,
   })
 
-  if (options.google) {
-    await registerGoogleFeature(app, {
-      ...options.google,
-      appBaseUrl: options.appBaseUrl,
-      database: options.database,
-      secureCookie: options.secureCookies ?? false,
-    })
-  }
-
   await registerShareFeature(app, {
     appBaseUrl: options.appBaseUrl,
     database: options.database,
@@ -88,6 +79,16 @@ export async function buildServer(options: BuildServerOptions) {
     secureCookie: options.secureCookies ?? false,
     timeZone: options.timeZone ?? 'Asia/Seoul',
   })
+
+  if (options.google) {
+    await registerGoogleFeature(app, {
+      ...options.google,
+      appBaseUrl: options.appBaseUrl,
+      database: options.database,
+      onEventsChanged: () => app.shareFeature.realtime.publishAll(),
+      secureCookie: options.secureCookies ?? false,
+    })
+  }
 
   if (options.publicDir) {
     await app.register(fastifyStatic, {

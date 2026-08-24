@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import type { AddressInfo } from 'node:net'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { encodeSecretMaterial, hashPassword } from '../../shared/secrets'
@@ -247,6 +248,44 @@ describe('share routes', () => {
       availability: 'AVAILABLE',
       events: [{ id: 'route-event', title: '공개 일정' }],
     })
+  })
+
+  it('authenticates an SSE stream and emits only a refetch signal', async () => {
+    const app = await createApp()
+    const created = app.shareFeature.shares.create({
+      accessEndsAt: null,
+      accessStartsAt: null,
+      calendarIds: [],
+      calendarScope: 'SELECTED',
+      eventEndDate: '2026-08-25',
+      eventStartDate: '2026-08-25',
+      name: '실시간 공유',
+    })
+    const exchanged = app.shareFeature.visitors.exchangeShareToken(created.token)
+    await app.listen({ host: '127.0.0.1', port: 0 })
+    const address = app.server.address() as AddressInfo
+
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/v1/public/stream`,
+      {
+        headers: {
+          cookie: `${VISITOR_SESSION_COOKIE}=${exchanged?.token ?? ''}`,
+        },
+      },
+    )
+    const reader = response.body?.getReader()
+    const first = await reader?.read()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    expect(new TextDecoder().decode(first?.value)).toBe(': connected\n\n')
+
+    app.shareFeature.realtime.publish(created.share.id)
+    const changed = await reader?.read()
+    expect(new TextDecoder().decode(changed?.value)).toBe(
+      'event: changed\ndata: {}\n\n',
+    )
+    await reader?.cancel()
   })
 })
 

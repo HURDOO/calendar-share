@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { encodeSecretMaterial } from '../../shared/secrets'
 import type { AppDatabase } from '../db/database'
@@ -121,5 +121,50 @@ describe('GoogleSyncWorker', () => {
         .prepare("select count(*) as count from sync_jobs where kind = 'CALENDAR_EVENTS_SYNC'")
         .get(),
     ).toEqual({ count: 1 })
+  })
+
+  it('signals clients only after an event sync succeeds', async () => {
+    const adapter = createFakeGoogleAdapter({
+      listEvents: async () => ({ items: [], nextSyncToken: 'events-next' }),
+    })
+    const database = createTestDatabase()
+    databases.push(database)
+    const connection = new GoogleConnectionService(
+      database,
+      new TokenCipher(encodeSecretMaterial(new Uint8Array(32).fill(21))),
+      () => now,
+    )
+    connection.connect('fixture-refresh-token', [...GOOGLE_CALENDAR_SCOPES])
+    database.sqlite
+      .prepare(`
+        insert into calendars (
+          id, connection_id, google_calendar_id, display_name, sync_token
+        ) values ('calendar-1', 1, 'google-calendar-1', '기본', 'events-old')
+      `)
+      .run()
+    const queue = new SyncJobQueue(database, () => now)
+    const sync = new GoogleSyncService(
+      database,
+      adapter,
+      connection,
+      'Asia/Seoul',
+      () => now,
+    )
+    const watch = new GoogleWatchService(
+      database,
+      adapter,
+      connection,
+      queue,
+      'http://localhost:8464',
+      () => now,
+    )
+    const onEventsChanged = vi.fn()
+    const worker = new GoogleSyncWorker(queue, sync, watch, onEventsChanged)
+    queue.enqueue('CALENDAR_EVENTS_SYNC', 'calendar-events:calendar-1', 'calendar-1')
+
+    await worker.runOnce()
+
+    expect(onEventsChanged).toHaveBeenCalledTimes(1)
+    expect(queue.counts()).toEqual({ SUCCEEDED: 1 })
   })
 })
