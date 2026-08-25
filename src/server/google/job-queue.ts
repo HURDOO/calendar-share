@@ -221,7 +221,7 @@ export class SyncJobQueue {
         update sync_jobs set
           status = 'RETRY', locked_at = null, next_attempt_at = ?,
           last_error_category = 'STALE_LOCK', updated_at = ?
-        where status = 'RUNNING' and locked_at < ?
+        where status = 'RUNNING' and locked_at <= ?
       `)
       .run(now, now, now - maxAgeMs)
     return result.changes

@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { config as loadDotenv } from 'dotenv'
+import type { FastifyInstance } from 'fastify'
 
 import { buildServer } from './app'
 import { loadAdminAuthSecrets } from './auth/config'
@@ -9,6 +10,7 @@ import { ConfigurationError, loadRuntimeConfig } from './config'
 import { databaseFilePath, openDatabase } from './db/database'
 import { loadGoogleSecrets } from './google/config'
 import { loadShareSecrets } from './shares/config'
+import { installGracefulShutdown } from './shutdown'
 
 async function main() {
   if (
@@ -29,9 +31,10 @@ async function main() {
   const database = openDatabase({
     filePath: databaseFilePath(runtime.storageDir),
   })
+  let app: FastifyInstance | undefined
 
   try {
-    const app = await buildServer({
+    app = await buildServer({
       adminAuth,
       appBaseUrl: runtime.appBaseUrl,
       database,
@@ -50,8 +53,13 @@ async function main() {
     })
 
     await app.listen({ host: runtime.host, port: runtime.port })
+    installGracefulShutdown(app)
   } catch (error) {
-    database.close()
+    if (app) {
+      await app.close()
+    } else {
+      database.close()
+    }
     throw error
   }
 }

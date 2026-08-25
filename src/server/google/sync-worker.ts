@@ -3,12 +3,18 @@ import { GoogleSyncService } from './sync-service'
 import { GoogleApiError } from './types'
 import { GoogleWatchService } from './watch-service'
 
+interface SyncWorkerLogger {
+  info(fields: Record<string, unknown>, message: string): void
+  warn(fields: Record<string, unknown>, message: string): void
+}
+
 export class GoogleSyncWorker {
   constructor(
     private readonly queue: SyncJobQueue,
     private readonly sync: GoogleSyncService,
     private readonly watch: GoogleWatchService,
     private readonly onEventsChanged: () => void = () => undefined,
+    private readonly logger?: SyncWorkerLogger,
   ) {}
 
   async runOnce(): Promise<boolean> {
@@ -17,6 +23,7 @@ export class GoogleSyncWorker {
       return false
     }
 
+    const startedAt = process.hrtime.bigint()
     try {
       await this.execute(job)
       this.queue.succeed(job.id)
@@ -25,11 +32,37 @@ export class GoogleSyncWorker {
         job.kind === 'CALENDAR_WINDOW_SYNC' ||
         job.kind === 'RECOVERY_SYNC'
       ) {
-        this.onEventsChanged()
+        try {
+          this.onEventsChanged()
+        } catch {
+          this.logger?.warn(
+            {
+              ...jobLogFields(job, startedAt, 'realtime_publish_failed'),
+              safe_error_code: 'REALTIME_PUBLISH_FAILED',
+            },
+            'Synchronization succeeded but realtime notification failed',
+          )
+        }
       }
+      this.logger?.info(
+        jobLogFields(job, startedAt, 'succeeded'),
+        'Synchronization job completed',
+      )
     } catch (error) {
       const failure = classifyWorkerError(error)
       this.queue.fail(job, failure.category, failure.retryable)
+      const status = this.queue.status(job.id)?.status
+      this.logger?.warn(
+        {
+          ...jobLogFields(
+            job,
+            startedAt,
+            status === 'RETRY' ? 'retry_scheduled' : 'failed',
+          ),
+          safe_error_code: failure.category,
+        },
+        'Synchronization job failed',
+      )
     }
 
     return true
@@ -67,6 +100,20 @@ export class GoogleSyncWorker {
         return
       }
     }
+  }
+}
+
+function jobLogFields(
+  job: ClaimedSyncJob,
+  startedAt: bigint,
+  result: string,
+): Record<string, unknown> {
+  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000
+  return {
+    duration_ms: Math.round(durationMs * 100) / 100,
+    job_id: job.id,
+    job_kind: job.kind,
+    result,
   }
 }
 

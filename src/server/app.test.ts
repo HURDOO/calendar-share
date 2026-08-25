@@ -61,13 +61,48 @@ describe('server foundation', () => {
     expect(response.json()).toEqual({ status: 'ok', phase: 'database' })
   })
 
-  it('reports the security hardening implementation phase', async () => {
+  it('reports the operational readiness implementation phase', async () => {
     const app = await createApp()
 
     const response = await app.inject({ method: 'GET', url: '/api/v1/meta' })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({ name: '캘공', phase: 'security-hardening' })
+    expect(response.json()).toEqual({ name: '캘공', phase: 'operational-readiness' })
+  })
+
+  it('keeps operational metrics behind administrator authentication', async () => {
+    const app = await createApp()
+
+    const anonymous = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/operations',
+    })
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/session',
+      headers: { origin: 'http://localhost:8464' },
+      payload: { password: 'test-password' },
+    })
+    const sessionCookie = login.cookies[0]
+    const authenticated = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/operations',
+      headers: {
+        cookie: sessionCookie ? `${sessionCookie.name}=${sessionCookie.value}` : '',
+      },
+    })
+
+    expect(anonymous.statusCode).toBe(401)
+    expect(login.statusCode).toBe(201)
+    expect(authenticated.statusCode).toBe(200)
+    expect(authenticated.json()).toMatchObject({
+      google: {
+        queue: { depth: 0, failedTotal: 0 },
+      },
+      http: {
+        publicEvents: { count: 0, maxMs: null, p95Ms: null },
+      },
+    })
   })
 
   it('applies security, indexing, and cache policy to dynamic responses', async () => {

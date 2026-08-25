@@ -54,7 +54,8 @@ describe('GoogleSyncWorker', () => {
       'https://calendar.app.hurdoo.kr',
       () => now,
     )
-    const worker = new GoogleSyncWorker(queue, sync, watch)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const worker = new GoogleSyncWorker(queue, sync, watch, undefined, logger)
     queue.enqueue('CALENDAR_LIST_SYNC', 'calendar-list')
 
     expect(await worker.runOnce()).toBe(true)
@@ -70,6 +71,19 @@ describe('GoogleSyncWorker', () => {
       attempt_count: 1,
       last_error_category: `GOOGLE_${category}`,
     })
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        duration_ms: expect.any(Number),
+        job_id: expect.any(String),
+        job_kind: 'CALENDAR_LIST_SYNC',
+        result: 'retry_scheduled',
+        safe_error_code: `GOOGLE_${category}`,
+      },
+      'Synchronization job failed',
+    )
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(
+      'fixture-refresh-token',
+    )
   })
 
   it('fans a calendar-list job out into deduplicated event jobs', async () => {

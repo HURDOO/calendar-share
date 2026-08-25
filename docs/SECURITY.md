@@ -1,6 +1,6 @@
 # 보안·접근성·호환성 기준
 
-기준일은 2026-08-25이며 T-009 구현과 검증 결과를 기록한다. 실제 production reverse proxy, Raspberry Pi 이미지, 실기기 smoke test는 T-010/T-011의 운영 경계다.
+기준일은 2026-08-25이며 T-010 구현과 검증 결과를 기록한다. 로컬 Linux ARM64 이미지 smoke는 완료했고 실제 production reverse proxy, Raspberry Pi 배포와 실기기 smoke는 T-011의 운영 경계다.
 
 ## 1. 신뢰 경계와 보호 자산
 
@@ -32,7 +32,7 @@ hash·암호문 중심 저장     PKCE/state/watch token 검증
 | OAuth·Google token 노출 | PKCE/state/admin-session 결합, refresh token AES-256-GCM, 최소 read-only scope, callback query·cookie log redaction | 암호화 키 유실 시 재연결이 필요하고 실제 OAuth smoke test는 Google 설정 후 수행한다. |
 | XSS·clickjacking·MIME 혼동 | React text escaping, 설명 plain text, same-origin script CSP, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff` | 동적 캘린더 색상 때문에 style에만 `unsafe-inline`이 남는다. inline script는 허용하지 않는다. |
 | cache·검색·Referer 잔존 | 동적/HTML `no-store`, `X-Robots-Tag: noindex`, HTML robots meta, `Referrer-Policy: no-referrer` | 사용자 화면 캡처·클립보드·브라우저 확장은 통제할 수 없다. |
-| 오류·로그를 통한 내부 정보 노출 | 500 응답은 `INTERNAL_ERROR`, 4xx 안정 code, URL/query/token/password/cookie/CSRF redaction | 운영 log sink 권한·보존 정책은 T-010에서 확정한다. |
+| 오류·로그를 통한 내부 정보 노출 | 500 응답은 `INTERNAL_ERROR`, 4xx 안정 code, URL/query/token/password/cookie/CSRF redaction, request/job 단위 안전 필드만 stdout JSON 기록 | T-011에서 host log 접근 제한과 14일/256MiB 회전 설정을 확인해야 한다. |
 | 과대 요청·서비스 고갈 | 64KiB body limit, 15초 request timeout, 외곽 proxy rate/body limit 전제 | SSE 장기 연결과 Google API/SQLite 자원 고갈은 관측성·부하 검증이 더 필요하다. |
 | webhook 위조·재전송 | 저장된 channel/resource/token 대조, 알림은 데이터가 아닌 sync hint, durable dedupe queue | Google 전달 지연과 누락은 5분 recovery sync 범위 안에서만 복구된다. |
 
@@ -47,7 +47,7 @@ hash·암호문 중심 저장     PKCE/state/watch token 검증
 
 | 항목 | 결과 |
 | --- | --- |
-| 서버 단위·통합 | Vitest 103개 통과: header/cache/HSTS, 64KiB 제한, 오류 마스킹, trusted proxy별 rate limit, legacy migration, fragment token 교환, 방문자 보기 전환·24시간 시간표·월간 날짜 연계·일정 상세 대화상자·멀티데이 표시와 비신뢰 forwarded header 무시 포함 |
+| 서버 단위·통합 | Vitest 112개 통과: 기존 보안·공유·동기화·방문자 흐름과 관리자 운영 상태, DB read/write/migration readiness, queue 즉시 복구, scheduler 종료 대기·예외 격리, 온라인 backup/checksum/별도 restore, graceful shutdown 포함 |
 | 접근성 | axe WCAG 2 A/AA·2.1 AA·2.2 AA tag 검사에서 홈, 로그인, 방문자 달력·일정 상세 대화상자, 관리자 공유 폼 위반 0건 |
 | 키보드 | 로그인 Enter 제출, 공유 폼 autofocus·radio Space 선택, 월 이동·보기 전환 Enter가 Chromium/WebKit에서 통과 |
 | Chromium | 데스크톱·390px 모바일에서 목록·주간·월간 전환, 816px 높이의 압축 24시간 시간표, Galaxy S9+ touch viewport와 KakaoTalk형 UA 시나리오 통과 |
@@ -55,6 +55,7 @@ hash·암호문 중심 저장     PKCE/state/watch token 검증
 | API 부재 fallback | EventSource가 없으면 일정은 유지하고 “새로고침으로 업데이트” 상태를 표시함 |
 | 비밀값 | client bundle 3개 파일에서 server secret 이름, Google API key, private key, `.env.local` 흔적 없음 |
 | 의존성 | `pnpm audit --prod` 알려진 취약점 0건 |
+| ARM64 runtime | Node.js 24.19.0 Linux ARM64에서 native `better-sqlite3`, migration, health/UI/API, online backup→restore, non-root/read-only root/cap drop/no-new-privileges, SIGTERM exit 0, 재시작 데이터 지속성 통과 |
 
 자동 검사는 접근성 전체를 증명하지 않으며 Playwright 기기 emulation은 실제 KakaoTalk 앱 자체가 아니다.
 

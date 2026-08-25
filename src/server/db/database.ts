@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
 import BetterSqlite3 from 'better-sqlite3'
@@ -56,6 +56,9 @@ export function openDatabase({
 
     const orm = drizzle({ client: sqlite, schema: databaseSchema })
     migrateDatabase(orm, migrationsFolder)
+    const expectedMigrationCount = readdirSync(migrationsFolder).filter((name) =>
+      name.endsWith('.sql'),
+    ).length
 
     return {
       filePath,
@@ -63,6 +66,25 @@ export function openDatabase({
       sqlite,
       assertReady() {
         sqlite.prepare('select 1 as ready').get()
+        const applied = sqlite
+          .prepare('select count(*) as count from __drizzle_migrations')
+          .get() as { count: number }
+        if (applied.count !== expectedMigrationCount) {
+          throw new Error('DATABASE_MIGRATION_STATE_INVALID')
+        }
+
+        sqlite.exec('savepoint readiness_write_probe')
+        try {
+          sqlite
+            .prepare(
+              `update __drizzle_migrations set created_at = created_at
+               where rowid = (select rowid from __drizzle_migrations limit 1)`,
+            )
+            .run()
+        } finally {
+          sqlite.exec('rollback to readiness_write_probe')
+          sqlite.exec('release readiness_write_probe')
+        }
       },
       close() {
         if (sqlite.open) {

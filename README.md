@@ -2,7 +2,7 @@
 
 내 Google 캘린더 일정을 사람별로 정한 범위와 기간만큼 안전하게 공유하는 개인용 서비스입니다.
 
-> 현재 상태: T-009 보안·접근성·브라우저 호환성 강화 완료. 다음 작업은 관측성·백업과 운영 준비입니다.
+> 현재 상태: T-010 관측성·백업·ARM64 운영 준비 완료. 실제 배포와 사용자 검증은 T-011입니다.
 
 관리자는 비밀번호로 보호된 대시보드에서 공유 링크와 공개 범위를 관리합니다. 방문자는 전달받은 링크를 열어 허용된 캘린더와 기간의 일정만 확인합니다.
 
@@ -14,6 +14,7 @@
 - `docs/TASKS.md`: 구현 순서와 검증 조건
 - `docs/DECISIONS.md`: 승인되었거나 제안된 주요 결정
 - `docs/SECURITY.md`: 위협 모델, 보안 정책, 브라우저 검증과 실기기 점검표
+- `docs/RUNBOOK.md`: 상태 확인, 백업·복원, 재시작, 배포 전 운영 절차
 
 ## 로컬 개발
 
@@ -66,6 +67,15 @@ pnpm db:check
 
 테스트는 실제 migration을 적용한 격리된 in-memory SQLite fixture를 사용합니다.
 
+실행 중 DB의 일관 snapshot과 checksum을 만들고, 별도 빈 DB에만 복원하려면 다음 명령을 사용합니다. restore는 기존 대상이나 WAL/SHM 동반 파일을 덮어쓰지 않습니다.
+
+```bash
+pnpm db:backup -- --source ./data/calendar-share.db
+pnpm db:restore -- --backup ./data/backups/calendar-share-BACKUP.db --target ./data/verification/restored.db
+```
+
+live DB 교체는 서비스를 중지하고 복구 지점과 대상을 확인한 뒤 별도 사용자 승인이 필요한 운영 작업입니다. 자세한 절차는 `docs/RUNBOOK.md`에 있습니다.
+
 ## 비밀값 CLI
 
 다음 명령은 민감한 결과를 터미널에 출력하므로 사용자가 직접 실행하고 결과를 채팅이나 Git에 남기지 않습니다.
@@ -114,3 +124,12 @@ pnpm secret:generate
 - 공개 화면에는 관리자 경로나 이동 링크가 없고, URL의 공유 ID와 방문자 세션의 정책 응답 ID가 일치할 때만 일정을 표시합니다.
 - `/api/v1/public/stream`은 인증된 SSE 연결에 일정 데이터가 아닌 `changed` 신호만 보냅니다. 브라우저는 신호를 받은 뒤 정책이 다시 검증되는 events API를 조회합니다.
 - 이벤트 동기화, 날짜 window 교체, 복구 sync와 공유 수정·회전·폐기가 열린 화면에 갱신 신호를 보냅니다. stream heartbeat도 현재 세션·폐기·접근 시간을 다시 확인합니다.
+
+## 운영과 ARM64 이미지
+
+- `/health/live`는 프로세스 생존, `/health/ready`는 DB 읽기·rollback 쓰기 probe·migration 상태를 검사합니다.
+- 관리자 인증이 필요한 `/api/v1/admin/operations`는 마지막 sync, 캘린더 lag/error, queue, watch 만료, 최근 공개 API latency를 제공합니다.
+- HTTP와 sync 작업은 token·일정 상세를 제외한 구조화 JSON 로그를 stdout에 기록합니다.
+- SIGTERM/SIGINT는 scheduler를 멈추고 실행 중인 작업을 기다린 뒤 DB를 닫습니다. 중단돼 `RUNNING`으로 남은 작업은 다음 시작에서 즉시 `RETRY`로 복구합니다.
+- `Dockerfile`과 `deploy.json`은 `calendar`, `https://calendar.app.hurdoo.kr`, `ghcr.io/hurdoo/calendar-share`, Linux ARM64, 영속 `/data`, 여섯 names-only secret 계약을 고정합니다.
+- T-010에서는 로컬 ARM64 빌드와 보안·백업 smoke만 수행했으며 이미지 push와 실제 배포는 하지 않았습니다.

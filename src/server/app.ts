@@ -1,5 +1,5 @@
 import fastifyStatic from '@fastify/static'
-import Fastify from 'fastify'
+import Fastify, { LogController, type FastifyRequest } from 'fastify'
 
 import { registerAdminAuth, type RegisterAdminAuthOptions } from './auth/admin-routes'
 import type { RuntimeConfig } from './config'
@@ -8,6 +8,8 @@ import {
   registerGoogleFeature,
   type RegisterGoogleFeatureOptions,
 } from './google/google-feature'
+import { OperationsMetrics } from './operations/metrics'
+import { registerOperationsRoutes } from './operations/operations-routes'
 import { registerResponsePolicy } from './security/response-policy'
 import { registerShareFeature } from './shares/share-feature'
 import type { ShareSecrets } from './shares/config'
@@ -38,6 +40,7 @@ interface BuildServerOptions {
   readonly publicDir?: string
   readonly logger?: boolean
   readonly logLevel?: RuntimeConfig['logLevel']
+  readonly metrics?: OperationsMetrics
   readonly secureCookies?: boolean
   readonly timeZone?: string
   readonly trustProxy?: string
@@ -48,8 +51,13 @@ interface BuildServerOptions {
 }
 
 export async function buildServer(options: BuildServerOptions) {
+  const metrics = options.metrics ?? new OperationsMetrics()
+  const requestStartedAt = new WeakMap<FastifyRequest, bigint>()
   const app = Fastify({
     bodyLimit: 64 * 1024,
+    logController: new LogController({
+      disableRequestLogging: true,
+    }),
     logger: options.logger
       ? {
           level: options.logLevel ?? 'info',
@@ -67,11 +75,39 @@ export async function buildServer(options: BuildServerOptions) {
     secureTransport: options.secureCookies ?? false,
   })
 
+  app.addHook('onRequest', async (request) => {
+    requestStartedAt.set(request, process.hrtime.bigint())
+  })
+  app.addHook('onResponse', async (request, reply) => {
+    const startedAt = requestStartedAt.get(request)
+    const durationMs = startedAt
+      ? Number(process.hrtime.bigint() - startedAt) / 1_000_000
+      : 0
+    const route = request.routeOptions.url || 'unmatched'
+    const result = httpResult(reply.statusCode)
+    metrics.recordHttp(route, durationMs)
+    request.log.info(
+      {
+        duration_ms: Math.round(durationMs * 100) / 100,
+        request_id: request.id,
+        result,
+        route,
+        status_code: reply.statusCode,
+      },
+      'HTTP request completed',
+    )
+  })
+
   app.setErrorHandler((error, request, reply) => {
     const statusCode = safeStatusCode(error)
     if (statusCode >= 500) {
       request.log.error(
-        { errorName: error instanceof Error ? error.name : 'UnknownError' },
+        {
+          request_id: request.id,
+          result: 'server_error',
+          route: request.routeOptions.url || 'unmatched',
+          safe_error_code: 'INTERNAL_ERROR',
+        },
         'Request failed without exposing internal details',
       )
       return reply.code(500).send({ code: 'INTERNAL_ERROR' })
@@ -82,9 +118,6 @@ export async function buildServer(options: BuildServerOptions) {
   })
 
   app.decorate('database', options.database)
-  app.addHook('onClose', async () => {
-    options.database.close()
-  })
 
   app.get('/health/live', async () => ({ status: 'ok' }))
   app.get('/health/ready', async (_request, reply) => {
@@ -97,7 +130,7 @@ export async function buildServer(options: BuildServerOptions) {
   })
   app.get('/api/v1/meta', async () => ({
     name: '캘공',
-    phase: 'security-hardening',
+    phase: 'operational-readiness',
   }))
 
   await registerAdminAuth(app, {
@@ -125,6 +158,11 @@ export async function buildServer(options: BuildServerOptions) {
     })
   }
 
+  await registerOperationsRoutes(app, {
+    database: options.database,
+    metrics,
+  })
+
   if (options.publicDir) {
     await app.register(fastifyStatic, {
       root: options.publicDir,
@@ -144,7 +182,22 @@ export async function buildServer(options: BuildServerOptions) {
     })
   }
 
+  app.addHook('onClose', async () => {
+    try {
+      await app.googleFeature?.shutdown()
+    } finally {
+      options.database.close()
+    }
+  })
+
   return app
+}
+
+function httpResult(statusCode: number): string {
+  if (statusCode >= 500) return 'server_error'
+  if (statusCode >= 400) return 'client_error'
+  if (statusCode >= 300) return 'redirect'
+  return 'success'
 }
 
 function safeStatusCode(error: unknown): number {

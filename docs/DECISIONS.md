@@ -239,3 +239,27 @@
 - 결정: Fastify `onSend` 경계에서 CSP, frame 차단, MIME sniffing 차단, 권한 API 제한, `no-referrer`, `noindex`와 기본 `no-store`를 적용한다. Vite fingerprint asset만 1년 immutable cache를 허용하고 HSTS는 운영 HTTPS에서만 보낸다. SSE hijack 응답은 같은 header 집합을 명시적으로 복사한다.
 - 고려한 대안: reverse proxy header만 사용, route별 header, 모든 자산 `no-store`, HSTS를 로컬 HTTP에도 적용.
 - 결과와 트레이드오프: 새 응답도 secure-by-default가 되며 정적 asset 성능은 유지된다. Google 캘린더 색상을 inline style로 표현하기 위해 style CSP에만 `unsafe-inline`이 남고 script는 same-origin으로 제한한다.
+
+## 2026-08-25: 운영 상태는 관리자 endpoint와 안전한 구조화 로그로 제공
+
+- 상태: 승인된 운영 기본값
+- 맥락: 단일 Raspberry Pi에서 동기화 지연, durable queue, watch 만료와 공개 API 성능을 외부 관측 서비스 없이 진단해야 한다.
+- 결정: HTTP와 sync job은 request/job ID, route 또는 kind, result, duration, 안전한 오류 code만 JSON stdout에 기록한다. 관리자 인증이 필요한 `/api/v1/admin/operations`는 마지막 성공 sync, 내부 캘린더별 lag/error, queue 상태, watch 만료, 프로세스별 최근 공개 events API 표본 512개의 p95/max를 제공한다. readiness는 DB 읽기, rollback 쓰기 probe, migration 상태만 검사한다.
+- 고려한 대안: 공개 metrics endpoint, 이벤트·Google 응답 원문 로그, Prometheus/외부 APM 즉시 도입, Google 장애를 readiness 실패로 처리.
+- 결과와 트레이드오프: 추가 운영 서비스 없이 장애 원인을 확인하고 민감한 일정·token을 로그에서 제외한다. latency 표본은 재시작 시 초기화되고 수평 확장 집계는 지원하지 않으므로 규모가 커지면 외부 metrics가 필요하다.
+
+## 2026-08-25: SQLite backup은 온라인 snapshot, 복원은 빈 대상 검증으로 제한
+
+- 상태: 승인된 데이터 보호 기본값
+- 맥락: WAL 사용 중 파일 단순 복사는 일관성을 보장하지 않고, 자동 live 덮어쓰기는 잘못된 대상이나 백업 선택으로 복구 지점을 잃을 수 있다.
+- 결정: SQLite Online Backup API로 일관 snapshot을 만들고 SHA-256, `integrity_check`, `foreign_key_check`, migration 개수를 검증한다. DB와 checksum은 0600으로 저장하며 기존 backup과 restore 대상은 덮어쓰지 않는다. restore CLI는 별도 빈 DB만 만들고 live 전환은 서비스 중지·복구 지점 확인·사용자 승인 뒤 운영 절차에서 수행한다. 자동 retention 삭제는 하지 않는다.
+- 고려한 대안: DB/WAL 파일 직접 복사, `.dump`, 시작 시 자동 backup, live DB 자동 덮어쓰기, 자동 기간 삭제.
+- 결과와 트레이드오프: 실행 중에도 복구 가능한 snapshot을 만들고 잘못된 복원으로 현재 데이터를 잃지 않는다. backup이 같은 host volume에 있어 물리 디스크 장애에는 취약하므로 후속 운영에서 암호화된 외부 복제 대상을 별도로 결정해야 한다.
+
+## 2026-08-25: 단일 프로세스 종료·ARM64 이미지·handoff 경계를 고정
+
+- 상태: 승인된 배포 준비 계약
+- 맥락: 프로세스 내 worker와 SQLite writer를 안전하게 종료하고 Raspberry Pi에서 native module 및 영속 데이터 경계를 재현해야 한다. 배포 주소와 이미지 저장소 이름은 서로 달라도 된다.
+- 결정: SIGTERM/SIGINT는 새 scheduler tick을 막고 실행 중 worker를 기다린 뒤 DB를 닫는다. 시작 시 남은 `RUNNING` job은 즉시 `RETRY`로 복구한다. 앱 ID와 origin은 `calendar`/`https://calendar.app.hurdoo.kr`를 유지하고 image repository는 `ghcr.io/hurdoo/calendar-share`를 사용한다. Node.js 24.19.0 기반 Linux ARM64 multi-stage 이미지는 비루트, read-only root, writable `/data`, `/tmp` tmpfs, capability drop과 `no-new-privileges`를 전제로 한다. T-010은 로컬 build/smoke까지만 하며 push와 배포는 T-011로 남긴다.
+- 고려한 대안: worker 강제 종료, stale lock 5분 대기, x86 emulation 이미지, root/writable runtime, 이미지 저장소도 `calendar`로 변경, T-010에서 즉시 push·배포.
+- 결과와 트레이드오프: queue 유실 없이 단일 프로세스를 정상 종료하고 프로젝트 repo 이름과 GHCR package를 일치시키면서 짧은 서비스 주소를 유지한다. 강제 종료 시 실행 중 API 호출은 완료되지 않을 수 있지만 durable job이 다음 시작에서 즉시 복구한다.

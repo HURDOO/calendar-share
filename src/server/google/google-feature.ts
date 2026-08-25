@@ -7,15 +7,12 @@ import { GoogleApiAdapter } from './google-adapter'
 import { SyncJobQueue } from './job-queue'
 import { GoogleOAuthService } from './oauth-service'
 import { registerGoogleRoutes } from './google-routes'
+import { startGoogleScheduler, type GoogleScheduler } from './scheduler'
 import { GoogleSyncService } from './sync-service'
 import { GoogleSyncWorker } from './sync-worker'
 import { TokenCipher } from './token-cipher'
 import type { GoogleAdapter } from './types'
 import { GoogleWatchService } from './watch-service'
-
-const workerIntervalMs = 1_000
-const recoveryIntervalMs = 5 * 60_000
-const maintenanceIntervalMs = 60 * 60_000
 
 export interface GoogleFeatureContext {
   readonly connection: GoogleConnectionService
@@ -24,6 +21,7 @@ export interface GoogleFeatureContext {
   readonly sync: GoogleSyncService
   readonly watch: GoogleWatchService
   disconnect(): Promise<void>
+  shutdown(): Promise<void>
   status(): {
     readonly connected: boolean
     readonly lastErrorCode: string | null
@@ -84,7 +82,9 @@ export async function registerGoogleFeature(
     sync,
     watch,
     options.onEventsChanged,
+    app.log,
   )
+  let scheduler: GoogleScheduler | null = null
 
   const context: GoogleFeatureContext = {
     connection,
@@ -125,6 +125,9 @@ export async function registerGoogleFeature(
       })
       disconnectLocally()
     },
+    async shutdown() {
+      await scheduler?.stop()
+    },
     status() {
       const google = connection.status()
       const calendars = options.database.sqlite
@@ -153,62 +156,33 @@ export async function registerGoogleFeature(
   })
 
   if (options.schedulerEnabled) {
-    queue.recoverStaleLocks()
+    const recoveredJobs = queue.recoverStaleLocks(0)
+    app.log.info(
+      {
+        recovered_jobs: recoveredJobs,
+        result: 'startup_recovery_completed',
+      },
+      'Recovered interrupted synchronization jobs',
+    )
     if (connection.status().connected) {
       queue.enqueue('RECOVERY_SYNC', 'recovery-sync')
     }
 
-    const timers = startScheduler({ connection, queue, sync, worker })
-    app.addHook('onClose', async () => {
-      for (const timer of timers) {
-        clearInterval(timer)
-      }
+    scheduler = startGoogleScheduler({
+      enqueue: (kind, dedupeKey) => queue.enqueue(kind, dedupeKey),
+      isConnected: () => connection.status().connected,
+      needsWindowReplacement: () => sync.needsWindowReplacement(),
+      onRunError: () => {
+        app.log.error(
+          {
+            result: 'failed',
+            safe_error_code: 'SYNC_WORKER_FAILED',
+          },
+          'Synchronization worker failed outside a claimed job',
+        )
+      },
+      recoverStaleLocks: (maxAgeMs) => queue.recoverStaleLocks(maxAgeMs),
+      runOnce: () => worker.runOnce(),
     })
   }
-}
-
-function startScheduler({
-  connection,
-  queue,
-  sync,
-  worker,
-}: {
-  readonly connection: GoogleConnectionService
-  readonly queue: SyncJobQueue
-  readonly sync: GoogleSyncService
-  readonly worker: GoogleSyncWorker
-}): NodeJS.Timeout[] {
-  let workerRunning = false
-  const workerTimer = setInterval(() => {
-    if (workerRunning) {
-      return
-    }
-
-    workerRunning = true
-    void worker.runOnce().finally(() => {
-      workerRunning = false
-    })
-  }, workerIntervalMs)
-  const recoveryTimer = setInterval(() => {
-    if (connection.status().connected) {
-      queue.enqueue('RECOVERY_SYNC', 'recovery-sync')
-    }
-  }, recoveryIntervalMs)
-  const maintenanceTimer = setInterval(() => {
-    if (!connection.status().connected) {
-      return
-    }
-
-    queue.recoverStaleLocks()
-    queue.enqueue('WATCH_RENEWAL', 'watch-renewal')
-    if (sync.needsWindowReplacement()) {
-      queue.enqueue('CALENDAR_WINDOW_SYNC', 'calendar-window')
-    }
-  }, maintenanceIntervalMs)
-
-  const timers = [workerTimer, recoveryTimer, maintenanceTimer]
-  for (const timer of timers) {
-    timer.unref()
-  }
-  return timers
 }

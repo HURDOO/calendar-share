@@ -122,12 +122,13 @@
 - 완료 조건: `00:00`부터 `24:00`까지 빈 초과 격자 없이 표시되고 timed 일정의 실제 시간 비율, 주간 7일 폭, 제목·장소 상세 동작이 유지된다.
 - 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. 18시 일정의 612px 위치, 1시간 일정의 34px 높이, 24시간 열의 816px 높이, Chromium/WebKit 320px·390px 무가로스크롤과 실제 320px 렌더링을 확인했다.
 
-## [>] T-010 관측성, 백업과 운영 준비
+## [x] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.
 - 선행 조건: T-005~T-009.
 - 산출물: 운영 endpoint, runbook, backup/restore 스크립트와 검증 기록, 배포 환경변수 names-only 계약.
 - 완료 조건: 별도 검증 DB 복원, 장애/재시작 후 queue 복구, Linux ARM64 image build와 health smoke test가 통과한다.
+- 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(112개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했다. 관리자 운영 상태, 민감정보 없는 HTTP/job 로그, DB read/write/migration readiness, SIGTERM worker 대기, 시작 즉시 stale queue 복구, 온라인 backup checksum·integrity·foreign key·migration 검증과 빈 대상 복원을 자동 검증했다. Node.js 24.19.0 Linux ARM64 image를 비루트·read-only root·capability drop·`no-new-privileges` 조건에서 빌드하고 native `better-sqlite3`, health/UI/API, online backup→restore, graceful exit 0, 재시작 데이터 지속성 smoke를 통과했다. 최종 로컬 image ID는 `sha256:5008fb63dab6ead186816b08ad37a9c56a66f4986ecc2ba2f095f0378776f521`이며 GHCR push와 실제 배포는 수행하지 않았다.
 
 ## [ ] T-011 Raspberry Pi 배포와 사용자 검증
 

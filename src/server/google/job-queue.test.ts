@@ -75,4 +75,27 @@ describe('SyncJobQueue', () => {
       database.close()
     }
   })
+
+  it('recovers every interrupted running job immediately after restart', () => {
+    const database = createTestDatabase()
+    database.sqlite
+      .prepare("insert into google_connections (id, status) values (1, 'DISCONNECTED')")
+      .run()
+    const baseTime = new Date('2026-08-25T00:00:00.000Z')
+    const queue = new SyncJobQueue(database, () => baseTime)
+
+    try {
+      queue.enqueue('RECOVERY_SYNC', 'recovery')
+      const job = queue.claimNext()
+      expect(job).not.toBeNull()
+
+      expect(queue.recoverStaleLocks(0)).toBe(1)
+      expect(queue.status(job?.id ?? '')).toMatchObject({
+        lastErrorCategory: 'STALE_LOCK',
+        status: 'RETRY',
+      })
+    } finally {
+      database.close()
+    }
+  })
 })

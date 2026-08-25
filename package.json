@@ -22,8 +22,10 @@
     "test:watch": "cross-env NODE_ENV=test vitest",
     "test:e2e": "pnpm build:client && playwright test",
     "security:bundle-check": "pnpm build:client && tsx scripts/check-client-bundle.ts",
+    "db:backup": "tsx scripts/backup-database.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
+    "db:restore": "tsx scripts/restore-database.ts",
     "admin:hash-password": "tsx scripts/hash-admin-password.ts",
     "secret:generate": "tsx scripts/generate-secret.ts"
   },

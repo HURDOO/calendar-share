@@ -2,7 +2,7 @@
 
 ## 1. 상태
 
-- 상태: T-009 보안·접근성·브라우저 호환성 강화 완료, 관측성·백업·운영 준비는 후속 작업
+- 상태: T-010 관측성·백업·Linux ARM64 운영 준비 완료, 실제 Raspberry Pi 배포는 후속 작업
 - 작성일: 2026-08-25
 - 전제: 단일 관리자, 단일 Raspberry Pi 인스턴스, SQLite 영속 볼륨
 - 승인된 제약과 제안 선택은 `docs/DECISIONS.md`에서 구분한다.
@@ -122,6 +122,7 @@ Google 계약 근거:
 | `/api/v1/public/stream` | 데이터 없는 갱신 신호 | 방문자 세션 + 매 연결 정책 검증 |
 | `POST /api/v1/google/webhook` | Google 알림 검증·작업 등록 | Google 채널 헤더 + 저장된 채널 token |
 | `GET /health/live`, `GET /health/ready` | 프로세스/DB 준비 상태 | 민감정보 없는 제한 응답 |
+| `GET /api/v1/admin/operations` | sync lag/error, queue, watch 만료, 최근 공개 API latency | 관리자 세션 |
 
 요청·응답 스키마는 공유 TypeScript 스키마에서 생성하고 런타임 검증한다. 오류는 안정된 코드와 request ID만 반환하며 내부 예외, SQL, Google 응답 원문을 노출하지 않는다. Public API는 동일 origin만 제공하고 범용 CORS를 열지 않는다.
 
@@ -160,6 +161,8 @@ Google 계약 근거:
 - 구조화 로그 필드: timestamp, level, request_id/job_id, route template, result, duration, safe error code. 토큰·이벤트 상세·비밀번호는 제외한다.
 - 최소 지표: 마지막 성공 동기화, 캘린더별 lag, queue depth, 실패 횟수, watch 만료까지 남은 시간, 공개 API latency.
 - readiness는 DB 읽기/쓰기 가능성과 마이그레이션 상태를 확인하되 Google 장애만으로 프로세스를 재시작 루프에 넣지 않는다.
+- latency는 외부 서비스 없이 프로세스별 최근 route 표본 512개만 보존한다. 운영 상태 API는 관리자 인증 뒤 제공하고 Google ID·캘린더 이름·이벤트 상세를 포함하지 않는다.
+- SIGTERM/SIGINT는 HTTP와 scheduler tick을 중단하고 실행 중 worker를 기다린 뒤 SQLite를 닫는다. 시작 시 남은 모든 `RUNNING` job은 즉시 `RETRY`로 복구한다.
 
 ## 9. 테스트 전략
 
@@ -191,6 +194,8 @@ Google 계약 근거:
 - SQLite DB와 안전한 백업은 이미지 밖의 같은 호스트 영속 볼륨에 둔다. WAL은 네트워크 파일시스템에 두지 않는다.
 - Google webhook과 OAuth callback은 위 공개 HTTPS origin의 고정 경로를 사용한다. wildcard DNS는 deploy-project 플랫폼이 제공하며 앱별 DNS를 별도로 만들지 않는다.
 - 배포 전 마이그레이션 호환성과 SQLite 온라인 백업을 확인한다. 롤백은 먼저 이전 앱 이미지가 현재 스키마와 호환되는지 확인한다.
+- 온라인 backup은 checksum, SQLite integrity/foreign key, migration 개수를 검증하고 mode 0600으로 저장한다. restore는 같은 검증 뒤 존재하지 않는 별도 DB만 만들며 live DB를 덮어쓰지 않는다.
+- runtime 이미지는 비루트 `node`, read-only root, `/tmp` tmpfs, capability drop, `no-new-privileges`, writable `/data`를 전제로 한다. base는 Node.js 24.19.0 ARM64 digest, package manager는 pnpm 11.12.0으로 고정한다.
 - 비호환 스키마 롤백은 서비스를 중지하고 승인된 복구 지점으로 복원해야 하므로 자동 수행하지 않는다.
 
 ## 12. 알려진 위험과 대안
