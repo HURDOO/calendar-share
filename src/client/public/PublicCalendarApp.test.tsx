@@ -127,7 +127,7 @@ describe('PublicCalendarApp', () => {
     )
   })
 
-  it('shows a multi-day event on every day it spans in week view', () => {
+  it('shows a multi-day event in each all-day cell it spans', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
     const event = calendarData().events[0]!
@@ -154,15 +154,66 @@ describe('PublicCalendarApp', () => {
         .getAllByText('여러 날 일정'),
     ).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: '주간' }))
-    const picker = rendered.container.querySelector('.week-date-picker')
-    const agenda = rendered.container.querySelector('.week-mobile-agenda')
-    expect(picker).not.toBeNull()
-    expect(agenda).not.toBeNull()
+    const timetable = rendered.container.querySelector('.week-timetable')
+    expect(timetable).not.toBeNull()
+    expect(
+      within(timetable as HTMLElement).getAllByText('여러 날 일정'),
+    ).toHaveLength(2)
+  })
+
+  it('places timed events on a Monday-to-Sunday 24-hour timetable', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
+    const rendered = render(
+      <PublicCalendarView data={calendarData()} showStreamStatus={false} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '주간' }))
+    const timetable = rendered.container.querySelector('.week-timetable')
+    const headers = rendered.container.querySelectorAll('.week-day-header')
+    const event = rendered.container.querySelector('.week-timed-event')
+    expect(timetable).toHaveAccessibleName(
+      '월요일부터 일요일까지 24시간 주간 시간표',
+    )
+    expect([...headers].map((header) => header.textContent?.at(0))).toEqual([
+      '월',
+      '화',
+      '수',
+      '목',
+      '금',
+      '토',
+      '일',
+    ])
+    expect(event).toHaveStyle({ height: '56px', top: '1008px' })
+    expect(
+      within(timetable as HTMLElement).getByText('24:00'),
+    ).toBeInTheDocument()
+  })
+
+  it('opens the selected monthly date in its week and keeps event names visible', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
+    const rendered = render(
+      <PublicCalendarView data={calendarData()} showStreamStatus={false} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '월간' }))
+    const month = rendered.container.querySelector('.visitor-month')
+    expect(within(month as HTMLElement).getByText('저녁 식사')).toBeInTheDocument()
     fireEvent.click(
-      within(picker as HTMLElement).getByRole('button', { name: /수.*26/ }),
+      within(month as HTMLElement).getByRole('button', {
+        name: /8월 25일.*주간 보기/,
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: '주간' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
     )
     expect(
-      within(agenda as HTMLElement).getByText('여러 날 일정'),
+      screen.getByRole('heading', {
+        name: '2026년 8월 24일 – 8월 30일',
+      }),
     ).toBeInTheDocument()
   })
 

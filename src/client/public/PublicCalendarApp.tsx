@@ -160,10 +160,23 @@ export function PublicCalendarView({
   readonly showStreamStatus?: boolean
 }) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>(initialViewMode)
+  const [startDate, endDate] = calendarBounds(data)
+  const [weekAnchorDate, setWeekAnchorDate] = useState(() =>
+    clamp(formatLocalDate(new Date().toISOString()), startDate, endDate),
+  )
+
+  useEffect(() => {
+    setWeekAnchorDate((current) => clamp(current, startDate, endDate))
+  }, [endDate, startDate])
 
   function selectViewMode(mode: CalendarViewMode) {
     setViewMode(mode)
     storeViewMode(mode)
+  }
+
+  function openWeekForDate(date: string) {
+    setWeekAnchorDate(clamp(date, startDate, endDate))
+    selectViewMode('week')
   }
 
   return (
@@ -217,16 +230,20 @@ export function PublicCalendarView({
           <p>이 기간에 공개된 일정이 생기면 이곳에 표시됩니다.</p>
         </section>
       ) : viewMode === 'list' ? (
-          <section className="visitor-list" aria-label="날짜별 일정 목록">
-            <EventList data={data} />
-          </section>
+        <section className="visitor-list" aria-label="날짜별 일정 목록">
+          <EventList data={data} />
+        </section>
       ) : viewMode === 'week' ? (
         <section className="visitor-week" aria-label="주간 일정 달력">
-          <WeekCalendar data={data} />
+          <WeekCalendar
+            anchorDate={weekAnchorDate}
+            data={data}
+            onAnchorDateChange={setWeekAnchorDate}
+          />
         </section>
       ) : (
         <section className="visitor-month" aria-label="월간 일정 달력">
-          <MonthCalendar data={data} />
+          <MonthCalendar data={data} onSelectDate={openWeekForDate} />
         </section>
       )}
     </>
@@ -301,7 +318,13 @@ function EventCard({ event }: { readonly event: PublicEvent }) {
   )
 }
 
-function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
+function MonthCalendar({
+  data,
+  onSelectDate,
+}: {
+  readonly data: PublicCalendarData
+  readonly onSelectDate: (date: string) => void
+}) {
   const [startDate, endDate] = calendarBounds(data)
   const startMonth = startDate.slice(0, 7)
   const endMonth = endDate.slice(0, 7)
@@ -357,27 +380,30 @@ function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
           const events = eventsForDate(data.events, date)
           const inRange = date >= startDate && date <= endDate
           return (
-            <section
-              aria-label={formatDateHeading(date)}
+            <button
+              aria-label={`${formatDateHeading(date)} 주간 보기`}
               className={`calendar-day${inRange ? '' : ' calendar-day--outside'}`}
+              disabled={!inRange}
               key={date}
+              onClick={() => onSelectDate(date)}
+              type="button"
             >
               <span className="calendar-day__number">{Number(date.slice(8, 10))}</span>
-              <div className="calendar-day__events">
+              <span className="calendar-day__events">
                 {events.slice(0, 3).map((event) => (
-                  <div className="calendar-event" key={event.id} title={event.title}>
+                  <span className="calendar-event" key={event.id} title={event.title}>
                     <span
                       className="calendar-event__dot"
                       style={{ backgroundColor: safeCalendarColor(event.calendar.color) }}
                     />
                     <span>{event.title}</span>
-                  </div>
+                  </span>
                 ))}
                 {events.length > 3 ? (
                   <span className="calendar-event-more">+{events.length - 3}개</span>
                 ) : null}
-              </div>
-            </section>
+              </span>
+            </button>
           )
         })}
       </div>
@@ -385,24 +411,24 @@ function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
   )
 }
 
-function WeekCalendar({ data }: { readonly data: PublicCalendarData }) {
+const weekHourHeight = 56
+
+function WeekCalendar({
+  anchorDate,
+  data,
+  onAnchorDateChange,
+}: {
+  readonly anchorDate: string
+  readonly data: PublicCalendarData
+  readonly onAnchorDateChange: (date: string) => void
+}) {
   const [startDate, endDate] = calendarBounds(data)
   const today = formatLocalDate(new Date().toISOString())
-  const initialDate = clamp(today, startDate, endDate)
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(initialDate))
-  const [selectedDate, setSelectedDate] = useState(initialDate)
+  const boundedAnchorDate = clamp(anchorDate, startDate, endDate)
+  const weekStart = startOfWeek(boundedAnchorDate)
   const dates = weekDates(weekStart)
   const weekEnd = dates[6] ?? weekStart
-
-  useEffect(() => {
-    const bounded = clamp(selectedDate, startDate, endDate)
-    setSelectedDate(bounded)
-    setWeekStart((current) => {
-      const minimumWeek = startOfWeek(startDate)
-      const maximumWeek = startOfWeek(endDate)
-      return clamp(current, minimumWeek, maximumWeek)
-    })
-  }, [endDate, selectedDate, startDate])
+  const gridHeight = weekHourHeight * 24
 
   function moveWeek(amount: number) {
     const nextStart = addDays(weekStart, amount * 7)
@@ -411,17 +437,14 @@ function WeekCalendar({ data }: { readonly data: PublicCalendarData }) {
       startOfWeek(startDate),
       startOfWeek(endDate),
     )
-    setWeekStart(boundedStart)
-    setSelectedDate(firstDateInRange(weekDates(boundedStart), startDate, endDate))
+    onAnchorDateChange(
+      firstDateInRange(weekDates(boundedStart), startDate, endDate),
+    )
   }
 
   function moveToToday() {
-    const bounded = clamp(today, startDate, endDate)
-    setSelectedDate(bounded)
-    setWeekStart(startOfWeek(bounded))
+    onAnchorDateChange(clamp(today, startDate, endDate))
   }
-
-  const selectedEvents = eventsForDate(data.events, selectedDate)
 
   return (
     <div className="week-calendar">
@@ -450,77 +473,119 @@ function WeekCalendar({ data }: { readonly data: PublicCalendarData }) {
         </button>
       </div>
 
-      <div className="week-date-picker" aria-label="주간 날짜 선택">
-        {dates.map((date) => {
-          const inRange = date >= startDate && date <= endDate
-          return (
-            <button
-              aria-pressed={selectedDate === date}
-              disabled={!inRange}
-              key={date}
-              onClick={() => setSelectedDate(date)}
-              type="button"
-            >
-              <span>{formatWeekday(date)}</span>
-              <strong>{Number(date.slice(8, 10))}</strong>
-            </button>
-          )
-        })}
-      </div>
-
-      <section className="week-mobile-agenda" aria-labelledby="selected-day-title">
-        <h3 id="selected-day-title">{formatDateHeading(selectedDate)}</h3>
-        {selectedEvents.length > 0 ? (
-          <div className="event-stack">
-            {selectedEvents.map((event) => (
-              <EventCard event={event} key={event.id} />
-            ))}
-          </div>
-        ) : (
-          <p className="week-empty">이 날짜에 공유된 일정이 없어요.</p>
-        )}
-      </section>
-
-      <div className="week-grid">
-        {dates.map((date) => {
-          const inRange = date >= startDate && date <= endDate
-          const events = inRange ? eventsForDate(data.events, date) : []
-          return (
-            <section
-              aria-label={formatDateHeading(date)}
-              className={`week-day${inRange ? '' : ' week-day--outside'}`}
-              key={date}
-            >
-              <header>
+      <div className="week-timetable-scroll">
+        <div className="week-timetable" aria-label="월요일부터 일요일까지 24시간 주간 시간표">
+          <div className="week-time-corner">시간</div>
+          {dates.map((date) => {
+            const inRange = date >= startDate && date <= endDate
+            return (
+              <div
+                className={`week-day-header${inRange ? '' : ' week-day-header--outside'}`}
+                key={`header-${date}`}
+              >
                 <span>{formatWeekday(date)}</span>
                 <strong>{Number(date.slice(8, 10))}</strong>
-              </header>
-              {events.length > 0 ? (
-                <div className="week-day__events">
-                  {events.map((event) => (
-                    <WeekEvent event={event} key={event.id} />
-                  ))}
-                </div>
-              ) : (
-                <p>{inRange ? '일정 없음' : '범위 밖'}</p>
-              )}
-            </section>
-          )
-        })}
+              </div>
+            )
+          })}
+
+          <div className="week-all-day-label">종일·미정</div>
+          {dates.map((date) => {
+            const inRange = date >= startDate && date <= endDate
+            const events = inRange
+              ? eventsForDate(data.events, date).filter(isUntimedEvent)
+              : []
+            return (
+              <div
+                aria-label={`${formatDateHeading(date)} 종일 및 시간 미정 일정`}
+                className={`week-all-day-cell${inRange ? '' : ' week-timetable-outside'}`}
+                key={`all-day-${date}`}
+              >
+                {events.map((event) => (
+                  <WeekAllDayEvent event={event} key={event.id} />
+                ))}
+              </div>
+            )
+          })}
+
+          <div className="week-time-axis" style={{ height: gridHeight }}>
+            {Array.from({ length: 25 }, (_, hour) => (
+              <span
+                className={hour === 0 ? 'is-start' : hour === 24 ? 'is-end' : ''}
+                key={hour}
+                style={{ top: hour * weekHourHeight }}
+              >
+                {String(hour).padStart(2, '0')}:00
+              </span>
+            ))}
+          </div>
+          {dates.map((date) => {
+            const inRange = date >= startDate && date <= endDate
+            const events = inRange
+              ? layoutTimedEventsForDate(data.events, date)
+              : []
+            return (
+              <div
+                aria-label={`${formatDateHeading(date)} 시간별 일정`}
+                className={`week-time-column${inRange ? '' : ' week-timetable-outside'}`}
+                key={`time-${date}`}
+                style={{ height: gridHeight }}
+              >
+                {events.map((layout) => (
+                  <WeekTimedEvent key={layout.event.id} layout={layout} />
+                ))}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
-function WeekEvent({ event }: { readonly event: PublicEvent }) {
+function WeekAllDayEvent({ event }: { readonly event: PublicEvent }) {
   return (
     <article
-      className="week-event"
+      aria-label={`${event.title}, ${formatEventTime(event)}`}
+      className="week-all-day-event"
       style={{ borderLeftColor: safeCalendarColor(event.calendar.color) }}
+      title={`${event.title} · ${formatEventTime(event)}`}
     >
-      <span>{formatEventTime(event)}</span>
-      <h3>{event.title}</h3>
-      <small>{event.calendar.name}</small>
+      {event.title}
+    </article>
+  )
+}
+
+interface TimedEventLayout {
+  column: number
+  columnCount: number
+  readonly endMinute: number
+  readonly event: PublicEvent
+  readonly startMinute: number
+}
+
+function WeekTimedEvent({ layout }: { readonly layout: TimedEventLayout }) {
+  const top = (layout.startMinute / 60) * weekHourHeight
+  const height = Math.max(
+    ((layout.endMinute - layout.startMinute) / 60) * weekHourHeight,
+    24,
+  )
+  const laneWidth = 100 / layout.columnCount
+  return (
+    <article
+      aria-label={`${layout.event.title}, ${formatEventTime(layout.event)}`}
+      className="week-timed-event"
+      style={{
+        borderLeftColor: safeCalendarColor(layout.event.calendar.color),
+        height,
+        left: `calc(${layout.column * laneWidth}% + 2px)`,
+        top,
+        width: `calc(${laneWidth}% - 4px)`,
+      }}
+      title={`${layout.event.title} · ${formatEventTime(layout.event)}`}
+    >
+      <strong>{layout.event.title}</strong>
+      <span>{formatEventTime(layout.event)}</span>
     </article>
   )
 }
@@ -590,6 +655,81 @@ function eventDateRange(event: PublicEvent): [string, string] | null {
     ? Math.max(Date.parse(event.startsAt), Date.parse(event.endsAt) - 1)
     : Date.parse(event.startsAt)
   return [start, formatLocalDate(new Date(endTimestamp).toISOString())]
+}
+
+function isUntimedEvent(event: PublicEvent): boolean {
+  return event.isAllDay || !event.startsAt || !event.endsAt
+}
+
+function layoutTimedEventsForDate(
+  events: PublicEvent[],
+  date: string,
+): TimedEventLayout[] {
+  const dayStart = Date.parse(`${date}T00:00:00+09:00`)
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000
+  const segments = events
+    .filter((event) => !isUntimedEvent(event))
+    .flatMap((event) => {
+      const eventStart = Date.parse(event.startsAt ?? '')
+      const eventEnd = Date.parse(event.endsAt ?? '')
+      const segmentStart = Math.max(eventStart, dayStart)
+      const segmentEnd = Math.min(eventEnd, dayEnd)
+      if (
+        !Number.isFinite(segmentStart) ||
+        !Number.isFinite(segmentEnd) ||
+        segmentEnd <= segmentStart
+      ) {
+        return []
+      }
+      return [
+        {
+          column: 0,
+          columnCount: 1,
+          endMinute: (segmentEnd - dayStart) / 60_000,
+          event,
+          startMinute: (segmentStart - dayStart) / 60_000,
+        },
+      ]
+    })
+    .sort(
+      (left, right) =>
+        left.startMinute - right.startMinute ||
+        right.endMinute - left.endMinute,
+    )
+
+  const positioned: TimedEventLayout[] = []
+  let group: TimedEventLayout[] = []
+  let groupEnd = -1
+
+  function flushGroup() {
+    const laneEnds: number[] = []
+    for (const segment of group) {
+      let column = laneEnds.findIndex((endMinute) => endMinute <= segment.startMinute)
+      if (column === -1) {
+        column = laneEnds.length
+      }
+      laneEnds[column] = segment.endMinute
+      segment.column = column
+    }
+    for (const segment of group) {
+      segment.columnCount = laneEnds.length
+    }
+    positioned.push(...group)
+    group = []
+    groupEnd = -1
+  }
+
+  for (const segment of segments) {
+    if (group.length > 0 && segment.startMinute >= groupEnd) {
+      flushGroup()
+    }
+    group.push(segment)
+    groupEnd = Math.max(groupEnd, segment.endMinute)
+  }
+  if (group.length > 0) {
+    flushGroup()
+  }
+  return positioned
 }
 
 function formatLocalDate(value: string): string {
@@ -681,7 +821,7 @@ function addDays(date: string, amount: number): string {
 
 function startOfWeek(date: string): string {
   const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay()
-  return addDays(date, -weekday)
+  return addDays(date, weekday === 0 ? -6 : 1 - weekday)
 }
 
 function weekDates(start: string): string[] {

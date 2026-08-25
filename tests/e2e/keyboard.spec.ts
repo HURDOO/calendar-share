@@ -77,12 +77,13 @@ test('switches views and moves between periods with the keyboard', async ({
   await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible()
   await expect(nextMonth).toBeFocused()
 
-  const weekView = page.getByRole('button', { name: '주간' })
+  const weekView = page.getByRole('button', { name: '주간', exact: true })
   await weekView.focus()
   await page.keyboard.press('Enter')
 
   await expect(weekView).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('region', { name: '주간 일정 달력' })).toBeVisible()
+  await expect(page.locator('.week-timetable')).toBeVisible()
   await expect(weekView).toBeFocused()
 })
 

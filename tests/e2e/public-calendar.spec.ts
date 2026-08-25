@@ -51,12 +51,22 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
   await expect(page.getByRole('link', { name: /관리자/ })).toHaveCount(0)
   expect(page.url()).not.toContain(shareToken)
 
-  await page.getByRole('button', { name: '주간' }).click()
-  await expect(page.locator('.week-date-picker')).toBeVisible()
-  await expect(page.locator('.week-mobile-agenda').getByText('모바일 첫 일정')).toBeVisible()
+  await page.getByRole('button', { name: '주간', exact: true }).click()
+  await expect(page.locator('.week-timetable-scroll')).toBeVisible()
+  await expect(page.locator('.week-timed-event').getByText('모바일 첫 일정')).toBeVisible()
   await page.getByRole('button', { name: '월간' }).click()
   await expect(page.locator('.visitor-month')).toBeVisible()
   await expect(page.getByRole('heading', { name: '2026년 8월' })).toBeVisible()
+  await expect(page.locator('.visitor-month').getByText('모바일 첫 일정')).toBeVisible()
+  await page
+    .getByRole('button', { name: /8월 25일.*주간 보기/ })
+    .click()
+  await expect(
+    page.getByRole('button', { name: '주간', exact: true }),
+  ).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await page.getByRole('button', { name: '목록' }).click()
 
   await page.evaluate(() => {
@@ -93,9 +103,10 @@ test('shows the monthly calendar on a wide screen', async ({ page }) => {
     page.locator('.visitor-month').getByText('데스크톱 일정'),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: '이전 달' })).toBeDisabled()
-  await page.getByRole('button', { name: '주간' }).click()
-  await expect(page.locator('.week-grid')).toBeVisible()
-  await expect(page.locator('.week-grid').getByText('데스크톱 일정')).toBeVisible()
+  await page.getByRole('button', { name: '주간', exact: true }).click()
+  await expect(page.locator('.week-timetable')).toBeVisible()
+  await expect(page.locator('.week-timed-event').getByText('데스크톱 일정')).toBeVisible()
+  await expect(page.locator('.week-day-header').first()).toContainText('월')
   await page.getByRole('button', { name: '목록' }).click()
   await expect(page.locator('.visitor-list').getByText('데스크톱 일정')).toBeVisible()
   await expect(page.getByRole('link', { name: /관리자/ })).toHaveCount(0)
