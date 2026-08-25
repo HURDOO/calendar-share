@@ -82,6 +82,14 @@
 - 완료 조건: 새 링크가 HTTP URL에 token을 보내지 않고 `/share/:id` 달력을 열며 기존 `/s/:token`도 동작한다. 활성 주소는 관리자 화면에서 다시 복사 가능하고 전체 데이터 정책과 수동 sync terminal 결과가 표시된다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(99개), `pnpm build`, `pnpm security:bundle-check` 통과. `pnpm test:e2e`는 Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했다. 기존 share·allowlist·visitor session 보존 migration, `ALL` 날짜 정책, HMAC token 재구성·회전, fragment 즉시 제거·POST 교환·clean URL, 레거시 `/s` 교환, 공유 주소 재표시·복사, 수동 sync 작업 추적, Vite `/s` proxy가 `/share`를 가로채지 않는 회귀를 검증했다.
 
+## [x] T-009B 방문자 목록·주간·월간 보기
+
+- 범위: 방문자가 목록·주간·월간 보기를 전환하고 주·월 기간을 탐색하며 선택한 보기 모드를 기기에서 기억하도록 한다.
+- 선행 조건: T-007~T-009A.
+- 산출물: 공통 보기 전환기, 모바일 날짜 선택형·데스크톱 7열형 주간 달력, 모바일 월간 압축 표시, 여러 날 일정 날짜 판정과 회귀 테스트.
+- 완료 조건: 모바일과 데스크톱에서 세 모드가 정책 범위 안에서 동작하고 관리자 미리보기도 같은 컴포넌트와 전환을 제공한다.
+- 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(101개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit에서 모바일 기본 목록·주간 날짜 선택·월간 압축 표시, 데스크톱 기본 월간·7열 주간·목록 전환, 선택 기억, 멀티데이 일정 표시, 키보드 보기 전환, SSE 후 현재 보기 갱신, 관리자 미리보기 전환을 검증했다.
+
 ## [>] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.

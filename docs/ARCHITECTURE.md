@@ -86,7 +86,7 @@ Google 계약 근거:
 - `jobs`: SQLite 기반 durable 작업 큐, 중복 제거, 지수 backoff와 jitter, dead-letter 상태.
 - `realtime`: 동기화 완료 신호용 SSE. 데이터 자체는 다시 권한 검증한 API로 조회한다.
 - `ui/admin`: Google 연결 상태, 공유 목록·편집·미리보기. 직접 입력한 `/admin` 경로에서만 진입한다.
-- `ui/public`: 모바일 우선 일정 목록과 넓은 화면 달력. 관리자 탐색 요소를 import하지 않는다.
+- `ui/public`: 목록·주간·월간 보기와 공통 기간 탐색. 모바일은 목록을 기본으로 하고 주간을 날짜 선택형으로, 넓은 화면은 월간을 기본으로 하고 주간을 7열형으로 렌더링한다. 관리자 탐색 요소를 import하지 않는다.
 - `observability`: 구조화 로그, request ID, 상태/준비 확인, 동기화 메트릭.
 
 초기 구현은 하나의 저장소와 package manifest를 사용하되 서버, 클라이언트, 공유 타입의 디렉터리 경계를 둔다. 별도 워크스페이스나 마이크로서비스는 만들지 않는다.
@@ -167,7 +167,7 @@ Google 계약 근거:
 - DB 통합: 마이그레이션, 외래키, 허용 목록, 이벤트 upsert/delete, sync token 410 교체, 작업 dedupe.
 - HTTP 통합: Fastify inject로 관리자 인증/CSRF/rate limit, 토큰 교환, 공개 응답 필터, webhook 헤더 검증.
 - Google 계약: 실제 네트워크 대신 기록된 최소 fixture와 fake client로 페이지네이션, 변경·삭제, 410/429/5xx를 재현한다. 별도 테스트 Google 프로젝트로 제한된 smoke test를 둔다.
-- UI: axe WCAG A/AA 자동 검사, 키보드 로그인·공유 편집·월 탐색, 빈/로딩/만료/오류 상태, 모바일/데스크톱 레이아웃.
+- UI: axe WCAG A/AA 자동 검사, 키보드 로그인·공유 편집·보기 전환·주/월 탐색, 빈/로딩/만료/오류 상태, 모바일/데스크톱 레이아웃.
 - E2E: 로그인→Google 연결 stub→공유 생성→미리보기→링크 방문→폐기, 관리자 링크 부재를 Chromium과 WebKit으로 확인한다. Galaxy S9+ viewport·touch·KakaoTalk형 user-agent와 EventSource 부재로 Android WebView fallback을 별도 검증한다.
 - 배포 검증: Linux ARM64 이미지에서 네이티브 SQLite driver load, 마이그레이션, health, 백업/복원 smoke test.
 

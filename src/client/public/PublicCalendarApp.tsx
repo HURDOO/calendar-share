@@ -37,6 +37,9 @@ type PageState =
   | { readonly status: 'ready'; readonly data: PublicCalendarData }
 
 type StreamState = 'connecting' | 'live' | 'retrying' | 'unsupported'
+type CalendarViewMode = 'list' | 'week' | 'month'
+
+const viewModeStorageKey = 'calendar-share:view-mode'
 
 export function PublicCalendarApp({ expectedShareId }: { expectedShareId: string }) {
   const [page, setPage] = useState<PageState>({ status: 'loading' })
@@ -156,6 +159,13 @@ export function PublicCalendarView({
   readonly stream?: StreamState
   readonly showStreamStatus?: boolean
 }) {
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(initialViewMode)
+
+  function selectViewMode(mode: CalendarViewMode) {
+    setViewMode(mode)
+    storeViewMode(mode)
+  }
+
   return (
     <>
       <header className="visitor-header">
@@ -178,6 +188,26 @@ export function PublicCalendarView({
         ) : null}
       </header>
 
+      <nav className="calendar-view-switcher" aria-label="캘린더 보기 모드">
+        {(
+          [
+            ['list', '목록'],
+            ['week', '주간'],
+            ['month', '월간'],
+          ] as const
+        ).map(([mode, label]) => (
+          <button
+            aria-pressed={viewMode === mode}
+            className={viewMode === mode ? 'is-active' : ''}
+            key={mode}
+            onClick={() => selectViewMode(mode)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
       {data.events.length === 0 ? (
         <section className="empty-calendar" aria-labelledby="empty-title">
           <div className="empty-calendar__icon" aria-hidden="true">
@@ -186,15 +216,18 @@ export function PublicCalendarView({
           <h2 id="empty-title">공유된 일정이 없어요</h2>
           <p>이 기간에 공개된 일정이 생기면 이곳에 표시됩니다.</p>
         </section>
-      ) : (
-        <>
+      ) : viewMode === 'list' ? (
           <section className="visitor-list" aria-label="날짜별 일정 목록">
             <EventList data={data} />
           </section>
-          <section className="desktop-calendar" aria-label="월간 일정 달력">
-            <MonthCalendar data={data} />
-          </section>
-        </>
+      ) : viewMode === 'week' ? (
+        <section className="visitor-week" aria-label="주간 일정 달력">
+          <WeekCalendar data={data} />
+        </section>
+      ) : (
+        <section className="visitor-month" aria-label="월간 일정 달력">
+          <MonthCalendar data={data} />
+        </section>
       )}
     </>
   )
@@ -277,9 +310,13 @@ function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
   const [month, setMonth] = useState(initialMonth)
   const days = calendarDays(month)
 
+  useEffect(() => {
+    setMonth((current) => clamp(current, startMonth, endMonth))
+  }, [endMonth, startMonth])
+
   return (
     <div className="month-calendar">
-      <div className="month-toolbar">
+      <div className="calendar-period-toolbar">
         <button
           aria-label="이전 달"
           className="calendar-nav"
@@ -290,6 +327,13 @@ function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
           ‹
         </button>
         <h2>{formatMonthHeading(month)}</h2>
+        <button
+          className="calendar-today"
+          onClick={() => setMonth(clamp(todayMonth, startMonth, endMonth))}
+          type="button"
+        >
+          오늘
+        </button>
         <button
           aria-label="다음 달"
           className="calendar-nav"
@@ -341,19 +385,162 @@ function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
   )
 }
 
+function WeekCalendar({ data }: { readonly data: PublicCalendarData }) {
+  const [startDate, endDate] = calendarBounds(data)
+  const today = formatLocalDate(new Date().toISOString())
+  const initialDate = clamp(today, startDate, endDate)
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(initialDate))
+  const [selectedDate, setSelectedDate] = useState(initialDate)
+  const dates = weekDates(weekStart)
+  const weekEnd = dates[6] ?? weekStart
+
+  useEffect(() => {
+    const bounded = clamp(selectedDate, startDate, endDate)
+    setSelectedDate(bounded)
+    setWeekStart((current) => {
+      const minimumWeek = startOfWeek(startDate)
+      const maximumWeek = startOfWeek(endDate)
+      return clamp(current, minimumWeek, maximumWeek)
+    })
+  }, [endDate, selectedDate, startDate])
+
+  function moveWeek(amount: number) {
+    const nextStart = addDays(weekStart, amount * 7)
+    const boundedStart = clamp(
+      nextStart,
+      startOfWeek(startDate),
+      startOfWeek(endDate),
+    )
+    setWeekStart(boundedStart)
+    setSelectedDate(firstDateInRange(weekDates(boundedStart), startDate, endDate))
+  }
+
+  function moveToToday() {
+    const bounded = clamp(today, startDate, endDate)
+    setSelectedDate(bounded)
+    setWeekStart(startOfWeek(bounded))
+  }
+
+  const selectedEvents = eventsForDate(data.events, selectedDate)
+
+  return (
+    <div className="week-calendar">
+      <div className="calendar-period-toolbar">
+        <button
+          aria-label="이전 주"
+          className="calendar-nav"
+          disabled={weekStart <= startOfWeek(startDate)}
+          onClick={() => moveWeek(-1)}
+          type="button"
+        >
+          ‹
+        </button>
+        <h2>{formatWeekHeading(weekStart, weekEnd)}</h2>
+        <button className="calendar-today" onClick={moveToToday} type="button">
+          오늘
+        </button>
+        <button
+          aria-label="다음 주"
+          className="calendar-nav"
+          disabled={weekStart >= startOfWeek(endDate)}
+          onClick={() => moveWeek(1)}
+          type="button"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="week-date-picker" aria-label="주간 날짜 선택">
+        {dates.map((date) => {
+          const inRange = date >= startDate && date <= endDate
+          return (
+            <button
+              aria-pressed={selectedDate === date}
+              disabled={!inRange}
+              key={date}
+              onClick={() => setSelectedDate(date)}
+              type="button"
+            >
+              <span>{formatWeekday(date)}</span>
+              <strong>{Number(date.slice(8, 10))}</strong>
+            </button>
+          )
+        })}
+      </div>
+
+      <section className="week-mobile-agenda" aria-labelledby="selected-day-title">
+        <h3 id="selected-day-title">{formatDateHeading(selectedDate)}</h3>
+        {selectedEvents.length > 0 ? (
+          <div className="event-stack">
+            {selectedEvents.map((event) => (
+              <EventCard event={event} key={event.id} />
+            ))}
+          </div>
+        ) : (
+          <p className="week-empty">이 날짜에 공유된 일정이 없어요.</p>
+        )}
+      </section>
+
+      <div className="week-grid">
+        {dates.map((date) => {
+          const inRange = date >= startDate && date <= endDate
+          const events = inRange ? eventsForDate(data.events, date) : []
+          return (
+            <section
+              aria-label={formatDateHeading(date)}
+              className={`week-day${inRange ? '' : ' week-day--outside'}`}
+              key={date}
+            >
+              <header>
+                <span>{formatWeekday(date)}</span>
+                <strong>{Number(date.slice(8, 10))}</strong>
+              </header>
+              {events.length > 0 ? (
+                <div className="week-day__events">
+                  {events.map((event) => (
+                    <WeekEvent event={event} key={event.id} />
+                  ))}
+                </div>
+              ) : (
+                <p>{inRange ? '일정 없음' : '범위 밖'}</p>
+              )}
+            </section>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function WeekEvent({ event }: { readonly event: PublicEvent }) {
+  return (
+    <article
+      className="week-event"
+      style={{ borderLeftColor: safeCalendarColor(event.calendar.color) }}
+    >
+      <span>{formatEventTime(event)}</span>
+      <h3>{event.title}</h3>
+      <small>{event.calendar.name}</small>
+    </article>
+  )
+}
+
 function groupEvents(data: PublicCalendarData): Array<[string, PublicEvent[]]> {
   const grouped = new Map<string, PublicEvent[]>()
+  const [policyStart, policyEnd] = calendarBounds(data)
   for (const event of data.events) {
-    const rawDate = eventDisplayDate(event)
-    const date =
-      data.share.eventDateScope === 'SELECTED' &&
-      data.share.eventStartDate &&
-      rawDate < data.share.eventStartDate
-        ? data.share.eventStartDate
-        : rawDate
-    const existing = grouped.get(date) ?? []
-    existing.push(event)
-    grouped.set(date, existing)
+    const range = eventDateRange(event)
+    const start = range
+      ? range[0] < policyStart
+        ? policyStart
+        : range[0]
+      : eventDisplayDate(event)
+    const end = range ? (range[1] > policyEnd ? policyEnd : range[1]) : start
+    for (const date of datesInRange(start, end)) {
+      const existing = grouped.get(date) ?? []
+      existing.push(event)
+      grouped.set(date, existing)
+    }
   }
   return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right))
 }
@@ -367,16 +554,20 @@ function calendarBounds(data: PublicCalendarData): [string, string] {
     return [data.share.eventStartDate, data.share.eventEndDate]
   }
 
-  const dates = data.events
-    .map(eventDisplayDate)
-    .filter((date) => date !== '9999-12-31')
-    .sort()
+  const ranges = data.events
+    .map(eventDateRange)
+    .filter((range): range is [string, string] => range !== null)
   const today = formatLocalDate(new Date().toISOString())
-  return [dates[0] ?? today, dates.at(-1) ?? today]
+  const starts = ranges.map(([start]) => start).sort()
+  const ends = ranges.map(([, end]) => end).sort()
+  return [starts[0] ?? today, ends.at(-1) ?? today]
 }
 
 function eventsForDate(events: PublicEvent[], date: string): PublicEvent[] {
-  return events.filter((event) => eventDisplayDate(event) === date)
+  return events.filter((event) => {
+    const range = eventDateRange(event)
+    return range ? date >= range[0] && date <= range[1] : false
+  })
 }
 
 function eventDisplayDate(event: PublicEvent): string {
@@ -384,6 +575,21 @@ function eventDisplayDate(event: PublicEvent): string {
     return event.startDate
   }
   return event.startsAt ? formatLocalDate(event.startsAt) : '9999-12-31'
+}
+
+function eventDateRange(event: PublicEvent): [string, string] | null {
+  if (event.startDate) {
+    const end = event.endDate ? addDays(event.endDate, -1) : event.startDate
+    return [event.startDate, end < event.startDate ? event.startDate : end]
+  }
+  if (!event.startsAt) {
+    return null
+  }
+  const start = formatLocalDate(event.startsAt)
+  const endTimestamp = event.endsAt
+    ? Math.max(Date.parse(event.startsAt), Date.parse(event.endsAt) - 1)
+    : Date.parse(event.startsAt)
+  return [start, formatLocalDate(new Date(endTimestamp).toISOString())]
 }
 
 function formatLocalDate(value: string): string {
@@ -432,6 +638,21 @@ function formatMonthHeading(month: string): string {
   return `${year}년 ${monthNumber}월`
 }
 
+function formatWeekHeading(start: string, end: string): string {
+  const [startYear, startMonth, startDay] = start.split('-').map(Number)
+  const [endYear, endMonth, endDay] = end.split('-').map(Number)
+  return startYear === endYear
+    ? `${startYear}년 ${startMonth}월 ${startDay}일 – ${endMonth}월 ${endDay}일`
+    : `${startYear}년 ${startMonth}월 ${startDay}일 – ${endYear}년 ${endMonth}월 ${endDay}일`
+}
+
+function formatWeekday(date: string): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'UTC',
+    weekday: 'short',
+  }).format(new Date(`${date}T00:00:00.000Z`))
+}
+
 function calendarDays(month: string): Array<string | null> {
   const [year = 0, monthNumber = 0] = month.split('-').map(Number)
   const firstWeekday = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay()
@@ -452,12 +673,66 @@ function addMonth(month: string, amount: number): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
+function addDays(date: string, amount: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`)
+  value.setUTCDate(value.getUTCDate() + amount)
+  return value.toISOString().slice(0, 10)
+}
+
+function startOfWeek(date: string): string {
+  const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay()
+  return addDays(date, -weekday)
+}
+
+function weekDates(start: string): string[] {
+  return Array.from({ length: 7 }, (_, index) => addDays(start, index))
+}
+
+function datesInRange(start: string, end: string): string[] {
+  const dates: string[] = []
+  for (let date = start; date <= end; date = addDays(date, 1)) {
+    dates.push(date)
+  }
+  return dates
+}
+
+function firstDateInRange(
+  dates: string[],
+  minimum: string,
+  maximum: string,
+): string {
+  return dates.find((date) => date >= minimum && date <= maximum) ?? minimum
+}
+
 function clamp(value: string, minimum: string, maximum: string): string {
   return value < minimum ? minimum : value > maximum ? maximum : value
 }
 
 function safeCalendarColor(color: string | null): string {
   return color && /^#[0-9a-f]{6}$/i.test(color) ? color : '#4b9ad1'
+}
+
+function initialViewMode(): CalendarViewMode {
+  try {
+    const stored = window.localStorage.getItem(viewModeStorageKey)
+    if (stored === 'list' || stored === 'week' || stored === 'month') {
+      return stored
+    }
+  } catch {
+    // Storage can be unavailable in restrictive in-app browser modes.
+  }
+  return typeof window.matchMedia === 'function' &&
+    window.matchMedia('(min-width: 820px)').matches
+    ? 'month'
+    : 'list'
+}
+
+function storeViewMode(mode: CalendarViewMode): void {
+  try {
+    window.localStorage.setItem(viewModeStorageKey, mode)
+  } catch {
+    // The selected mode still works for the current page without storage.
+  }
 }
 
 function streamLabel(stream: StreamState): string {

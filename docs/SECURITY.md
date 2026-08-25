@@ -47,11 +47,11 @@ hash·암호문 중심 저장     PKCE/state/watch token 검증
 
 | 항목 | 결과 |
 | --- | --- |
-| 서버 단위·통합 | Vitest 99개 통과: header/cache/HSTS, 64KiB 제한, 오류 마스킹, trusted proxy별 rate limit, legacy migration, fragment token 교환, 비신뢰 forwarded header 무시 포함 |
+| 서버 단위·통합 | Vitest 101개 통과: header/cache/HSTS, 64KiB 제한, 오류 마스킹, trusted proxy별 rate limit, legacy migration, fragment token 교환, 방문자 보기 전환·멀티데이 표시와 비신뢰 forwarded header 무시 포함 |
 | 접근성 | axe WCAG 2 A/AA·2.1 AA·2.2 AA tag 검사에서 홈, 로그인, 방문자 달력, 관리자 공유 폼 위반 0건 |
-| 키보드 | 로그인 Enter 제출, 공유 폼 autofocus·radio Space 선택, 월 이동 Enter가 Chromium/WebKit에서 통과 |
-| Chromium | 데스크톱·390px 모바일·Galaxy S9+ touch viewport와 KakaoTalk형 UA 시나리오 통과 |
-| WebKit | 로그인, 공유 수명주기, clipboard fallback, 모바일 목록, 데스크톱 월간 달력, axe·키보드 시나리오 통과 |
+| 키보드 | 로그인 Enter 제출, 공유 폼 autofocus·radio Space 선택, 월 이동·보기 전환 Enter가 Chromium/WebKit에서 통과 |
+| Chromium | 데스크톱·390px 모바일에서 목록·주간·월간 전환, Galaxy S9+ touch viewport와 KakaoTalk형 UA 시나리오 통과 |
+| WebKit | 로그인, 공유 수명주기, clipboard fallback, 모바일·데스크톱 목록/주간/월간, axe·키보드 시나리오 통과 |
 | API 부재 fallback | EventSource가 없으면 일정은 유지하고 “새로고침으로 업데이트” 상태를 표시함 |
 | 비밀값 | client bundle 3개 파일에서 server secret 이름, Google API key, private key, `.env.local` 흔적 없음 |
 | 의존성 | `pnpm audit --prod` 알려진 취약점 0건 |

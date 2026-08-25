@@ -1,16 +1,41 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { PublicCalendarApp, type PublicCalendarData } from './PublicCalendarApp'
+import {
+  PublicCalendarApp,
+  type PublicCalendarData,
+  PublicCalendarView,
+} from './PublicCalendarApp'
 
 const shareId = '30000000-0000-4000-8000-000000000001'
 
 describe('PublicCalendarApp', () => {
+  beforeEach(() => {
+    const values = new Map<string, string>()
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    })
+  })
+
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -67,6 +92,78 @@ describe('PublicCalendarApp', () => {
 
     expect(await screen.findByText('전체 데이터')).toBeInTheDocument()
     expect(screen.getAllByText('저녁 식사').length).toBeGreaterThan(0)
+  })
+
+  it('switches between list, week, and month views and remembers the choice', async () => {
+    const data = calendarData()
+    const first = render(
+      <PublicCalendarView data={data} showStreamStatus={false} />,
+    )
+
+    expect(screen.getByRole('button', { name: '목록' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await userEvent.click(screen.getByRole('button', { name: '주간' }))
+    expect(
+      screen.getByRole('region', { name: '주간 일정 달력' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '주간' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '월간' }))
+    expect(
+      screen.getByRole('region', { name: '월간 일정 달력' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2026년 8월' })).toBeInTheDocument()
+    first.unmount()
+
+    render(<PublicCalendarView data={data} showStreamStatus={false} />)
+    expect(screen.getByRole('button', { name: '월간' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('shows a multi-day event on every day it spans in week view', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
+    const event = calendarData().events[0]!
+    const data = calendarData({
+      events: [
+        {
+          ...event,
+          id: 'multi-day-event',
+          isAllDay: true,
+          startsAt: null,
+          endsAt: null,
+          startDate: '2026-08-25',
+          endDate: '2026-08-27',
+          title: '여러 날 일정',
+        },
+      ],
+    })
+    const rendered = render(
+      <PublicCalendarView data={data} showStreamStatus={false} />,
+    )
+
+    expect(
+      within(rendered.container.querySelector('.visitor-list') as HTMLElement)
+        .getAllByText('여러 날 일정'),
+    ).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '주간' }))
+    const picker = rendered.container.querySelector('.week-date-picker')
+    const agenda = rendered.container.querySelector('.week-mobile-agenda')
+    expect(picker).not.toBeNull()
+    expect(agenda).not.toBeNull()
+    fireEvent.click(
+      within(picker as HTMLElement).getByRole('button', { name: /수.*26/ }),
+    )
+    expect(
+      within(agenda as HTMLElement).getByText('여러 날 일정'),
+    ).toBeInTheDocument()
   })
 
   it('shows an unavailable state without disclosing a reason', async () => {

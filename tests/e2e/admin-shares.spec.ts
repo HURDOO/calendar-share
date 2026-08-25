@@ -134,6 +134,7 @@ test('creates, previews, edits, copies, and revokes a share', async ({
   await page.getByRole('button', { name: '미리보기' }).click()
   const preview = page.getByRole('region', { name: '공유 미리보기' })
   await expect(preview.getByText('방문자와 같은 일정').last()).toBeVisible()
+  await preview.getByRole('button', { name: '목록' }).click()
   await expect(preview.getByText('같은 정책 응답')).toHaveCount(1)
 
   await page.getByRole('button', { name: '수정' }).click()

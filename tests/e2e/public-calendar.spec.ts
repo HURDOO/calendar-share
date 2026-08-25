@@ -41,12 +41,23 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
   await expect(page).toHaveURL(new RegExp(`/share/${shareId}$`))
   await expect(page.getByRole('heading', { name: '가족 공유' })).toBeVisible()
   await expect(page.locator('.visitor-list')).toBeVisible()
-  await expect(page.locator('.desktop-calendar')).toBeHidden()
+  await expect(page.getByRole('button', { name: '목록' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(page.locator('.visitor-list').getByText('모바일 첫 일정')).toBeVisible()
   await expect(page.locator('.visitor-list').getByText('우리 집')).toBeVisible()
   await expect(page.locator('.visitor-list').getByText('함께 식사해요')).toBeVisible()
   await expect(page.getByRole('link', { name: /관리자/ })).toHaveCount(0)
   expect(page.url()).not.toContain(shareToken)
+
+  await page.getByRole('button', { name: '주간' }).click()
+  await expect(page.locator('.week-date-picker')).toBeVisible()
+  await expect(page.locator('.week-mobile-agenda').getByText('모바일 첫 일정')).toBeVisible()
+  await page.getByRole('button', { name: '월간' }).click()
+  await expect(page.locator('.visitor-month')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '2026년 8월' })).toBeVisible()
+  await page.getByRole('button', { name: '목록' }).click()
 
   await page.evaluate(() => {
     ;(window as unknown as { emitCalendarEvent: (type: string) => void }).emitCalendarEvent(
@@ -72,13 +83,21 @@ test('shows the monthly calendar on a wide screen', async ({ page }) => {
 
   await page.goto(`/#share=${shareToken}`)
 
-  await expect(page.locator('.desktop-calendar')).toBeVisible()
-  await expect(page.locator('.visitor-list')).toBeHidden()
+  await expect(page.locator('.visitor-month')).toBeVisible()
+  await expect(page.getByRole('button', { name: '월간' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(page.getByRole('heading', { name: '2026년 8월' })).toBeVisible()
   await expect(
-    page.locator('.desktop-calendar').getByText('데스크톱 일정'),
+    page.locator('.visitor-month').getByText('데스크톱 일정'),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: '이전 달' })).toBeDisabled()
+  await page.getByRole('button', { name: '주간' }).click()
+  await expect(page.locator('.week-grid')).toBeVisible()
+  await expect(page.locator('.week-grid').getByText('데스크톱 일정')).toBeVisible()
+  await page.getByRole('button', { name: '목록' }).click()
+  await expect(page.locator('.visitor-list').getByText('데스크톱 일정')).toBeVisible()
   await expect(page.getByRole('link', { name: /관리자/ })).toHaveCount(0)
 })
 

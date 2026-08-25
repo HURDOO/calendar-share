@@ -27,7 +27,9 @@ test('supports administrator login and share editing from the keyboard', async (
   await expect(page.getByLabel('가족')).toBeChecked()
 })
 
-test('moves between calendar months with the keyboard', async ({ page }) => {
+test('switches views and moves between periods with the keyboard', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'EventSource', {
       configurable: true,
@@ -74,6 +76,14 @@ test('moves between calendar months with the keyboard', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible()
   await expect(nextMonth).toBeFocused()
+
+  const weekView = page.getByRole('button', { name: '주간' })
+  await weekView.focus()
+  await page.keyboard.press('Enter')
+
+  await expect(weekView).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('region', { name: '주간 일정 달력' })).toBeVisible()
+  await expect(weekView).toBeFocused()
 })
 
 async function installKeyboardAdminApi(page: Page): Promise<void> {
