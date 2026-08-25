@@ -10,6 +10,7 @@ test('creates, previews, edits, copies, and revokes a share', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 1000 })
+  await page.clock.setFixedTime(new Date('2026-08-25T00:00:00.000Z'))
   if (browserName === 'chromium') {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
       origin: 'http://127.0.0.1:4177',

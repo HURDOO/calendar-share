@@ -130,9 +130,11 @@
 - 완료 조건: 별도 검증 DB 복원, 장애/재시작 후 queue 복구, Linux ARM64 image build와 health smoke test가 통과한다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(112개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했다. 관리자 운영 상태, 민감정보 없는 HTTP/job 로그, DB read/write/migration readiness, SIGTERM worker 대기, 시작 즉시 stale queue 복구, 온라인 backup checksum·integrity·foreign key·migration 검증과 빈 대상 복원을 자동 검증했다. Node.js 24.19.0 Linux ARM64 image를 비루트·read-only root·capability drop·`no-new-privileges` 조건에서 빌드하고 native `better-sqlite3`, health/UI/API, online backup→restore, graceful exit 0, 재시작 데이터 지속성 smoke를 통과했다. 최종 로컬 image ID는 `sha256:5008fb63dab6ead186816b08ad37a9c56a66f4986ecc2ba2f095f0378776f521`이며 GHCR push와 실제 배포는 수행하지 않았다.
 
-## [ ] T-011 Raspberry Pi 배포와 사용자 검증
+## [-] T-011 Raspberry Pi 배포와 사용자 검증
 
 - 범위: 사용자의 별도 배포 지시가 있을 때만 `deploy-project` 스킬로 이미지와 dashboard handoff를 준비하고 사용자가 제어하는 배포를 검증한다.
 - 선행 조건: T-010, 공개 HTTPS origin, Google production 자격 증명, 배포 승인.
 - 산출물: 배포 가능한 이미지, secrets names-only readiness, 배포/롤백 검증 기록.
 - 완료 조건: 사용자 제어 배포 후 health, OAuth callback, Google webhook, 공유 링크 smoke test가 성공하고 검증된 롤백 지점이 있다.
+- 진행: 2026-08-26 사용자가 `@hurdoo` 저장소에 `@hurdooagent` collaborator로 push하는 방식과 public 배포 계획을 승인했다. deployd v0.7.1과 배포 plan은 정상이며 신규 앱·GHCR package가 아직 없어 수동 bootstrap workflow부터 진행한다.
+- 검증(배포 준비): 2026-08-26 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(112개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e`가 통과했다. Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했으며, 날짜 경과로 공유 범위 밖에 밀리던 관리자 미리보기 E2E fixture는 브라우저 시계를 기준일로 고정해 안정화했다.
