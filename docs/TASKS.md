@@ -106,6 +106,14 @@
 - 완료 조건: 최소 320px부터 주간 시간표의 7일이 모두 한 화면에 보이고 `scrollWidth`가 표시 영역을 넘지 않는다.
 - 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit의 320px·390px에서 요일 7개, 마지막 일요일 경계와 무가로스크롤을 검증하고 320px 실화면 캡처로 일정 제목 가독성을 확인했다.
 
+## [x] T-009E 주·월간 일정 상세 표시
+
+- 범위: 주간·월간의 압축 일정 카드에 장소를 추가하고 일정 선택 시 승인된 필드를 공통 상세 대화상자로 표시한다.
+- 선행 조건: T-009D와 사용자 일정 상세 피드백.
+- 산출물: 주·월간 제목/장소 카드, 날짜·시간·장소·설명 상세 대화상자, 월간 날짜/일정 분리 동작, 키보드·접근성·브라우저 회귀 테스트.
+- 완료 조건: 주간·월간에서 장소를 확인하고 일정 선택으로 상세를 열 수 있다. 월간 날짜 선택은 계속 해당 주간을 열고, 최소 320px의 7일 폭과 승인된 공개 필드 경계를 유지한다.
+- 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit에서 주·월간 장소, 상세 열기·닫기·Escape·포커스 복원, 월간 날짜→주간 분리 동작, 320px 주간 무가로스크롤, 상세 열린 상태의 axe 위반 0건을 검증했다.
+
 ## [>] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.

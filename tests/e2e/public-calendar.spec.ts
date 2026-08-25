@@ -54,6 +54,13 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
   await page.getByRole('button', { name: '주간', exact: true }).click()
   await expect(page.locator('.week-timetable-scroll')).toBeVisible()
   await expect(page.locator('.week-timed-event').getByText('모바일 첫 일정')).toBeVisible()
+  await expect(page.locator('.week-timed-event').getByText('우리 집')).toBeVisible()
+  await page.getByRole('button', { name: '모바일 첫 일정 상세 보기' }).click()
+  const weekDialog = page.getByRole('dialog', { name: '모바일 첫 일정' })
+  await expect(weekDialog.getByText('우리 집')).toBeVisible()
+  await expect(weekDialog.getByText('함께 식사해요')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(weekDialog).toHaveCount(0)
   await expectFullWeekToFit(page)
   await page.setViewportSize({ width: 320, height: 844 })
   await expectFullWeekToFit(page)
@@ -61,8 +68,14 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
   await expect(page.locator('.visitor-month')).toBeVisible()
   await expect(page.getByRole('heading', { name: '2026년 8월' })).toBeVisible()
   await expect(page.locator('.visitor-month').getByText('모바일 첫 일정')).toBeVisible()
+  await expect(page.locator('.visitor-month').getByText('우리 집')).toBeVisible()
+  await page.getByRole('button', { name: '모바일 첫 일정 상세 보기' }).click()
+  const monthDialog = page.getByRole('dialog', { name: '모바일 첫 일정' })
+  await expect(monthDialog.getByText('함께 식사해요')).toBeVisible()
+  await monthDialog.getByRole('button', { name: '일정 상세 닫기' }).click()
   await page
     .getByRole('button', { name: /8월 25일.*주간 보기/ })
+    .locator('.calendar-day__number')
     .click()
   await expect(
     page.getByRole('button', { name: '주간', exact: true }),

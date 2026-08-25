@@ -190,7 +190,7 @@ describe('PublicCalendarApp', () => {
     ).toBeInTheDocument()
   })
 
-  it('opens the selected monthly date in its week and keeps event names visible', () => {
+  it('shows compact locations, opens details, and opens a monthly date in its week', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
     const rendered = render(
@@ -200,6 +200,23 @@ describe('PublicCalendarApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '월간' }))
     const month = rendered.container.querySelector('.visitor-month')
     expect(within(month as HTMLElement).getByText('저녁 식사')).toBeInTheDocument()
+    expect(within(month as HTMLElement).getByText('우리 집')).toBeInTheDocument()
+    const eventButton = within(month as HTMLElement).getByRole('button', {
+      name: '저녁 식사 상세 보기',
+    })
+    eventButton.focus()
+    fireEvent.click(eventButton)
+
+    const dialog = screen.getByRole('dialog', { name: '저녁 식사' })
+    expect(within(dialog).getByText('우리 집')).toBeInTheDocument()
+    expect(within(dialog).getByText('함께 식사해요')).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: '일정 상세 닫기' }),
+    ).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(eventButton).toHaveFocus()
+
     fireEvent.click(
       within(month as HTMLElement).getByRole('button', {
         name: /8월 25일.*주간 보기/,

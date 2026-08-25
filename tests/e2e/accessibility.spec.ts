@@ -38,6 +38,12 @@ test('has no detectable WCAG A or AA violations in the public calendar', async (
   await page.goto(`/share/${shareId}`)
   await expect(page.getByRole('heading', { name: '접근성 공유' })).toBeVisible()
   await expectAccessible(page)
+
+  await page.getByRole('button', { name: '월간' }).click()
+  await page.getByRole('button', { name: '접근 가능한 일정 상세 보기' }).click()
+  await expect(page.getByRole('dialog', { name: '접근 가능한 일정' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '일정 상세 닫기' })).toBeFocused()
+  await expectAccessible(page)
 })
 
 test('has no detectable WCAG A or AA violations in the share form', async ({

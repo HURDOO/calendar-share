@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface PublicEvent {
   readonly id: string
@@ -160,6 +160,7 @@ export function PublicCalendarView({
   readonly showStreamStatus?: boolean
 }) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>(initialViewMode)
+  const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null)
   const [startDate, endDate] = calendarBounds(data)
   const [weekAnchorDate, setWeekAnchorDate] = useState(() =>
     clamp(formatLocalDate(new Date().toISOString()), startDate, endDate),
@@ -168,6 +169,16 @@ export function PublicCalendarView({
   useEffect(() => {
     setWeekAnchorDate((current) => clamp(current, startDate, endDate))
   }, [endDate, startDate])
+
+  useEffect(() => {
+    setSelectedEvent((current) =>
+      current
+        ? (data.events.find((event) => event.id === current.id) ?? null)
+        : null,
+    )
+  }, [data.events])
+
+  const closeEventDetails = useCallback(() => setSelectedEvent(null), [])
 
   function selectViewMode(mode: CalendarViewMode) {
     setViewMode(mode)
@@ -239,13 +250,21 @@ export function PublicCalendarView({
             anchorDate={weekAnchorDate}
             data={data}
             onAnchorDateChange={setWeekAnchorDate}
+            onSelectEvent={setSelectedEvent}
           />
         </section>
       ) : (
         <section className="visitor-month" aria-label="월간 일정 달력">
-          <MonthCalendar data={data} onSelectDate={openWeekForDate} />
+          <MonthCalendar
+            data={data}
+            onSelectDate={openWeekForDate}
+            onSelectEvent={setSelectedEvent}
+          />
         </section>
       )}
+      {selectedEvent ? (
+        <EventDetailDialog event={selectedEvent} onClose={closeEventDetails} />
+      ) : null}
     </>
   )
 }
@@ -318,12 +337,105 @@ function EventCard({ event }: { readonly event: PublicEvent }) {
   )
 }
 
+function EventDetailDialog({
+  event,
+  onClose,
+}: {
+  readonly event: PublicEvent
+  readonly onClose: () => void
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeButtonRef.current?.focus()
+
+    function handleKeyDown(keyEvent: KeyboardEvent) {
+      if (keyEvent.key === 'Escape') {
+        onClose()
+      } else if (keyEvent.key === 'Tab') {
+        keyEvent.preventDefault()
+        closeButtonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+      previousFocus?.focus()
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="event-detail-backdrop"
+      onMouseDown={(mouseEvent) => {
+        if (mouseEvent.target === mouseEvent.currentTarget) {
+          onClose()
+        }
+      }}
+    >
+      <section
+        aria-labelledby="event-detail-title"
+        aria-modal="true"
+        className="event-detail-dialog"
+        role="dialog"
+      >
+        <div className="event-detail-dialog__heading">
+          <div>
+            <span className="event-detail-dialog__calendar">
+              <span
+                aria-hidden="true"
+                style={{ backgroundColor: safeCalendarColor(event.calendar.color) }}
+              />
+              {event.calendar.name}
+            </span>
+            <h2 id="event-detail-title">{event.title}</h2>
+          </div>
+          <button
+            aria-label="일정 상세 닫기"
+            className="event-detail-dialog__close"
+            onClick={onClose}
+            ref={closeButtonRef}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <dl className="event-detail-list">
+          <div>
+            <dt>날짜와 시간</dt>
+            <dd>{formatEventDateTime(event)}</dd>
+          </div>
+          {event.location ? (
+            <div>
+              <dt>장소</dt>
+              <dd>{event.location}</dd>
+            </div>
+          ) : null}
+          {event.description ? (
+            <div>
+              <dt>설명</dt>
+              <dd>{event.description}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </section>
+    </div>
+  )
+}
+
 function MonthCalendar({
   data,
   onSelectDate,
+  onSelectEvent,
 }: {
   readonly data: PublicCalendarData
   readonly onSelectDate: (date: string) => void
+  readonly onSelectEvent: (event: PublicEvent) => void
 }) {
   const [startDate, endDate] = calendarBounds(data)
   const startMonth = startDate.slice(0, 7)
@@ -377,33 +489,49 @@ function MonthCalendar({
           if (!date) {
             return <div className="calendar-day calendar-day--blank" key={`blank-${index}`} />
           }
-          const events = eventsForDate(data.events, date)
           const inRange = date >= startDate && date <= endDate
+          const events = inRange ? eventsForDate(data.events, date) : []
           return (
-            <button
-              aria-label={`${formatDateHeading(date)} 주간 보기`}
+            <div
               className={`calendar-day${inRange ? '' : ' calendar-day--outside'}`}
-              disabled={!inRange}
               key={date}
-              onClick={() => onSelectDate(date)}
-              type="button"
             >
-              <span className="calendar-day__number">{Number(date.slice(8, 10))}</span>
+              <button
+                aria-label={`${formatDateHeading(date)} 주간 보기`}
+                className="calendar-day__open-week"
+                disabled={!inRange}
+                onClick={() => onSelectDate(date)}
+                type="button"
+              >
+                <span className="calendar-day__number">
+                  {Number(date.slice(8, 10))}
+                </span>
+              </button>
               <span className="calendar-day__events">
                 {events.slice(0, 3).map((event) => (
-                  <span className="calendar-event" key={event.id} title={event.title}>
+                  <button
+                    aria-label={`${event.title} 상세 보기`}
+                    className="calendar-event"
+                    key={event.id}
+                    onClick={() => onSelectEvent(event)}
+                    title={`${event.title}${event.location ? ` · ${event.location}` : ''}`}
+                    type="button"
+                  >
                     <span
                       className="calendar-event__dot"
                       style={{ backgroundColor: safeCalendarColor(event.calendar.color) }}
                     />
-                    <span>{event.title}</span>
-                  </span>
+                    <span className="calendar-event__text">
+                      <strong>{event.title}</strong>
+                      {event.location ? <small>{event.location}</small> : null}
+                    </span>
+                  </button>
                 ))}
                 {events.length > 3 ? (
                   <span className="calendar-event-more">+{events.length - 3}개</span>
                 ) : null}
               </span>
-            </button>
+            </div>
           )
         })}
       </div>
@@ -417,10 +545,12 @@ function WeekCalendar({
   anchorDate,
   data,
   onAnchorDateChange,
+  onSelectEvent,
 }: {
   readonly anchorDate: string
   readonly data: PublicCalendarData
   readonly onAnchorDateChange: (date: string) => void
+  readonly onSelectEvent: (event: PublicEvent) => void
 }) {
   const [startDate, endDate] = calendarBounds(data)
   const today = formatLocalDate(new Date().toISOString())
@@ -502,7 +632,11 @@ function WeekCalendar({
                 key={`all-day-${date}`}
               >
                 {events.map((event) => (
-                  <WeekAllDayEvent event={event} key={event.id} />
+                  <WeekAllDayEvent
+                    event={event}
+                    key={event.id}
+                    onSelect={onSelectEvent}
+                  />
                 ))}
               </div>
             )
@@ -532,7 +666,11 @@ function WeekCalendar({
                 style={{ height: gridHeight }}
               >
                 {events.map((layout) => (
-                  <WeekTimedEvent key={layout.event.id} layout={layout} />
+                  <WeekTimedEvent
+                    key={layout.event.id}
+                    layout={layout}
+                    onSelect={onSelectEvent}
+                  />
                 ))}
               </div>
             )
@@ -543,16 +681,25 @@ function WeekCalendar({
   )
 }
 
-function WeekAllDayEvent({ event }: { readonly event: PublicEvent }) {
+function WeekAllDayEvent({
+  event,
+  onSelect,
+}: {
+  readonly event: PublicEvent
+  readonly onSelect: (event: PublicEvent) => void
+}) {
   return (
-    <article
-      aria-label={`${event.title}, ${formatEventTime(event)}`}
+    <button
+      aria-label={`${event.title} 상세 보기`}
       className="week-all-day-event"
+      onClick={() => onSelect(event)}
       style={{ borderLeftColor: safeCalendarColor(event.calendar.color) }}
       title={`${event.title} · ${formatEventTime(event)}`}
+      type="button"
     >
-      {event.title}
-    </article>
+      <strong>{event.title}</strong>
+      {event.location ? <small>{event.location}</small> : null}
+    </button>
   )
 }
 
@@ -564,7 +711,13 @@ interface TimedEventLayout {
   readonly startMinute: number
 }
 
-function WeekTimedEvent({ layout }: { readonly layout: TimedEventLayout }) {
+function WeekTimedEvent({
+  layout,
+  onSelect,
+}: {
+  readonly layout: TimedEventLayout
+  readonly onSelect: (event: PublicEvent) => void
+}) {
   const top = (layout.startMinute / 60) * weekHourHeight
   const height = Math.max(
     ((layout.endMinute - layout.startMinute) / 60) * weekHourHeight,
@@ -572,9 +725,10 @@ function WeekTimedEvent({ layout }: { readonly layout: TimedEventLayout }) {
   )
   const laneWidth = 100 / layout.columnCount
   return (
-    <article
-      aria-label={`${layout.event.title}, ${formatEventTime(layout.event)}`}
+    <button
+      aria-label={`${layout.event.title} 상세 보기`}
       className="week-timed-event"
+      onClick={() => onSelect(layout.event)}
       style={{
         borderLeftColor: safeCalendarColor(layout.event.calendar.color),
         height,
@@ -583,10 +737,12 @@ function WeekTimedEvent({ layout }: { readonly layout: TimedEventLayout }) {
         width: `calc(${laneWidth}% - 4px)`,
       }}
       title={`${layout.event.title} · ${formatEventTime(layout.event)}`}
+      type="button"
     >
       <strong>{layout.event.title}</strong>
+      {layout.event.location ? <small>{layout.event.location}</small> : null}
       <span>{formatEventTime(layout.event)}</span>
-    </article>
+    </button>
   )
 }
 
@@ -758,6 +914,18 @@ function formatEventTime(event: PublicEvent): string {
   return `${formatter.format(new Date(event.startsAt))}–${formatter.format(
     new Date(event.endsAt),
   )}`
+}
+
+function formatEventDateTime(event: PublicEvent): string {
+  const range = eventDateRange(event)
+  if (!range) {
+    return formatEventTime(event)
+  }
+  const date =
+    range[0] === range[1]
+      ? formatDateHeading(range[0])
+      : `${formatDateHeading(range[0])} – ${formatDateHeading(range[1])}`
+  return `${date} · ${formatEventTime(event)}`
 }
 
 function formatDateHeading(date: string): string {
