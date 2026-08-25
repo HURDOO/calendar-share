@@ -114,6 +114,14 @@
 - 완료 조건: 주간·월간에서 장소를 확인하고 일정 선택으로 상세를 열 수 있다. 월간 날짜 선택은 계속 해당 주간을 열고, 최소 320px의 7일 폭과 승인된 공개 필드 경계를 유지한다.
 - 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit에서 주·월간 장소, 상세 열기·닫기·Escape·포커스 복원, 월간 날짜→주간 분리 동작, 320px 주간 무가로스크롤, 상세 열린 상태의 axe 위반 0건을 검증했다.
 
+## [x] T-009F 주간 시간표 세로 밀도 보완
+
+- 범위: 주간 24시간 시간표의 시간당 세로 간격을 기존 56px의 약 60%로 줄인다.
+- 선행 조건: T-009E와 사용자 세로 간격 피드백.
+- 산출물: 34px 시간 간격, 816px 24시간 격자, 일정 위치·높이와 배경 시간선 동기화, 단위·브라우저 회귀 테스트.
+- 완료 조건: `00:00`부터 `24:00`까지 빈 초과 격자 없이 표시되고 timed 일정의 실제 시간 비율, 주간 7일 폭, 제목·장소 상세 동작이 유지된다.
+- 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. 18시 일정의 612px 위치, 1시간 일정의 34px 높이, 24시간 열의 816px 높이, Chromium/WebKit 320px·390px 무가로스크롤과 실제 320px 렌더링을 확인했다.
+
 ## [>] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.

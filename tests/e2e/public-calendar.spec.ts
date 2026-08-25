@@ -131,6 +131,7 @@ test('shows the monthly calendar on a wide screen', async ({ page }) => {
 async function expectFullWeekToFit(page: Page): Promise<void> {
   const metrics = await page.locator('.week-timetable-scroll').evaluate((scroll) => {
     const headers = [...scroll.querySelectorAll('.week-day-header')]
+    const timeColumn = scroll.querySelector('.week-time-column')
     const scrollBounds = scroll.getBoundingClientRect()
     const lastHeaderBounds = headers.at(-1)?.getBoundingClientRect()
     return {
@@ -139,11 +140,13 @@ async function expectFullWeekToFit(page: Page): Promise<void> {
       lastHeaderRight: lastHeaderBounds?.right ?? Number.POSITIVE_INFINITY,
       scrollRight: scrollBounds.right,
       scrollWidth: scroll.scrollWidth,
+      timeColumnHeight: timeColumn?.getBoundingClientRect().height ?? 0,
     }
   })
   expect(metrics.headerCount).toBe(7)
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1)
   expect(metrics.lastHeaderRight).toBeLessThanOrEqual(metrics.scrollRight + 1)
+  expect(metrics.timeColumnHeight).toBe(816)
 }
 
 async function installMockEventSource(page: Page): Promise<void> {

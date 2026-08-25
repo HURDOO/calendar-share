@@ -539,7 +539,7 @@ function MonthCalendar({
   )
 }
 
-const weekHourHeight = 56
+const weekHourHeight = 34
 
 function WeekCalendar({
   anchorDate,

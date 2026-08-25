@@ -184,7 +184,10 @@ describe('PublicCalendarApp', () => {
       '토',
       '일',
     ])
-    expect(event).toHaveStyle({ height: '56px', top: '1008px' })
+    expect(event).toHaveStyle({ height: '34px', top: '612px' })
+    expect(rendered.container.querySelector('.week-time-column')).toHaveStyle({
+      height: '816px',
+    })
     expect(
       within(timetable as HTMLElement).getByText('24:00'),
     ).toBeInTheDocument()

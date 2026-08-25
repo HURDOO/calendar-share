@@ -1110,14 +1110,14 @@ button:disabled {
 .week-time-axis,
 .week-time-column {
   position: relative;
-  min-height: 1344px;
+  min-height: 816px;
   border-right: 1px solid #e4edf3;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 55px,
-    #dfeaf1 55px,
-    #dfeaf1 56px
+    transparent 33px,
+    #dfeaf1 33px,
+    #dfeaf1 34px
   );
 }
 
@@ -1156,9 +1156,9 @@ button:disabled {
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 55px,
-    #e4e9ec 55px,
-    #e4e9ec 56px
+    transparent 33px,
+    #e4e9ec 33px,
+    #e4e9ec 34px
   );
 }
 
