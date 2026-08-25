@@ -38,13 +38,15 @@ describe('ShareDashboard', () => {
         storedShare = shareFixture({
           calendarIds: createPayload.calendarIds as string[],
           calendarScope: createPayload.calendarScope as 'ALL' | 'SELECTED',
-          eventEndDate: String(createPayload.eventEndDate),
-          eventStartDate: String(createPayload.eventStartDate),
+          eventEndDate: createPayload.eventEndDate as string | null,
+          eventDateScope: createPayload.eventDateScope as 'ALL' | 'SELECTED',
+          eventStartDate: createPayload.eventStartDate as string | null,
           name: String(createPayload.name),
+          shareUrl: 'https://calendar.app.hurdoo.kr/#share=persistent-link',
         })
         return jsonResponse({
           share: storedShare,
-          shareUrl: 'https://calendar.app.hurdoo.kr/s/one-time-link',
+          shareUrl: storedShare.shareUrl,
           token: 'not-used-by-ui',
         }, 201)
       }
@@ -54,8 +56,11 @@ describe('ShareDashboard', () => {
           share: {
             id: shareId,
             name: storedShare?.name ?? '가족 공유',
-            eventStartDate: storedShare?.eventStartDate ?? '2026-08-25',
-            eventEndDate: storedShare?.eventEndDate ?? '2026-09-25',
+            eventDateScope: storedShare?.eventDateScope ?? 'SELECTED',
+            eventStartDate: storedShare
+              ? storedShare.eventStartDate
+              : '2026-08-25',
+            eventEndDate: storedShare ? storedShare.eventEndDate : '2026-09-25',
           },
           events: [eventFixture()],
         })
@@ -91,21 +96,25 @@ describe('ShareDashboard', () => {
     await userEvent.type(screen.getByLabelText('공유 이름'), '가족 공유')
     await userEvent.click(screen.getByLabelText(/선택한 캘린더만/))
     await userEvent.click(screen.getByLabelText('업무'))
+    await userEvent.click(screen.getByLabelText(/전체 데이터/))
     await userEvent.click(screen.getByRole('button', { name: '공유 만들기' }))
 
     expect(
       await screen.findByDisplayValue(
-        'https://calendar.app.hurdoo.kr/s/one-time-link',
+        'https://calendar.app.hurdoo.kr/#share=persistent-link',
       ),
     ).toBeInTheDocument()
     expect(createPayload).toMatchObject({
       name: '가족 공유',
       calendarScope: 'SELECTED',
       calendarIds: [calendarOne],
+      eventDateScope: 'ALL',
+      eventStartDate: null,
+      eventEndDate: null,
     })
     await userEvent.click(screen.getAllByRole('button', { name: '링크 복사' })[0]!)
     expect(writeText).toHaveBeenCalledWith(
-      'https://calendar.app.hurdoo.kr/s/one-time-link',
+      'https://calendar.app.hurdoo.kr/#share=persistent-link',
     )
 
     await userEvent.click(screen.getByRole('button', { name: '미리보기' }))
@@ -149,8 +158,10 @@ function shareFixture(
     name: string
     calendarScope: 'ALL' | 'SELECTED'
     calendarIds: string[]
-    eventStartDate: string
-    eventEndDate: string
+    eventDateScope: 'ALL' | 'SELECTED'
+    eventStartDate: string | null
+    eventEndDate: string | null
+    shareUrl: string | null
     accessStartsAt: string | null
     accessEndsAt: string | null
     revokedAt: string | null
@@ -163,8 +174,10 @@ function shareFixture(
     name: '가족 공유',
     calendarScope: 'SELECTED' as const,
     calendarIds: [calendarOne],
+    eventDateScope: 'SELECTED' as const,
     eventStartDate: '2026-08-25',
     eventEndDate: '2026-09-25',
+    shareUrl: 'https://calendar.app.hurdoo.kr/#share=persistent-link',
     accessStartsAt: null,
     accessEndsAt: null,
     revokedAt: null,

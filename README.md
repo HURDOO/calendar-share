@@ -35,6 +35,7 @@ pnpm dev
 - `ADMIN_PASSWORD_HASH`: `pnpm admin:hash-password` 출력
 - `SESSION_SECRET`: `pnpm secret:generate` 출력
 - `GOOGLE_TOKEN_ENCRYPTION_KEY`: `pnpm secret:generate` 출력
+- `SHARE_LINK_SECRET`: 다른 용도와 재사용하지 않고 `pnpm secret:generate`로 별도 생성한 출력
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: Google Cloud OAuth Web application client 값
 
 관리자 화면은 공개 화면에 링크하지 않으며 주소창에서 `/admin`으로 직접 들어갑니다.
@@ -74,7 +75,7 @@ pnpm admin:hash-password
 pnpm secret:generate
 ```
 
-`admin:hash-password`는 TTY 숨김 입력으로 8자 이상의 비밀번호를 두 번 받고 scrypt verifier를 출력합니다. `secret:generate`는 `SESSION_SECRET`과 `GOOGLE_TOKEN_ENCRYPTION_KEY`에 사용할 256비트 값을 한 번에 하나씩 출력합니다.
+`admin:hash-password`는 TTY 숨김 입력으로 8자 이상의 비밀번호를 두 번 받고 scrypt verifier를 출력합니다. `secret:generate`는 `SESSION_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, `SHARE_LINK_SECRET`에 사용할 256비트 값을 한 번에 하나씩 출력합니다. 세 용도마다 명령을 따로 실행하고 값을 재사용하지 않습니다.
 
 ## 관리자 인증 보안 계약
 
@@ -92,14 +93,15 @@ pnpm secret:generate
 - refresh token은 `GOOGLE_TOKEN_ENCRYPTION_KEY`를 사용하는 AES-256-GCM 암호문으로만 DB에 저장하고 access token은 영속 저장하지 않습니다.
 - 초기 동기화는 `Asia/Seoul` 오늘 기준 앞뒤 3개월이며, 이후 sync token 변경분과 삭제를 반영합니다. 410 응답은 같은 작업에서 전체 동기화로 복구합니다.
 - Google webhook은 검증된 채널의 변경 힌트로만 사용합니다. 실제 일정은 durable SQLite queue와 API 재조회로 반영하며 5분 복구 sync와 만료 전 채널 갱신을 함께 사용합니다.
+- 관리자 수동 동기화는 durable 작업 ID를 반환하며 화면이 대기·진행·재시도·완료 시각 또는 안전한 실패 안내까지 확인합니다.
 - 로컬 HTTP에서는 watch가 비활성화되고 복구 sync가 변경을 보완합니다. 운영 watch endpoint는 `https://calendar.app.hurdoo.kr/api/v1/google/webhook`입니다.
 
 ## 공유 정책과 링크 계약
 
 - `ALL` 공유는 조회 시점의 활성 캘린더 전체를 사용해 새 캘린더를 자동 포함합니다. 하나라도 제외한 `SELECTED` 공유는 저장된 allowlist만 사용하며 빈 선택도 허용합니다.
-- 일정 날짜 범위는 `Asia/Seoul` 달력 날짜의 양끝을 포함하고, 일정 구간이 공유 날짜와 겹칠 때만 제공합니다. 접근 시작은 포함하고 종료는 배타적입니다.
-- 공유 링크 token은 256비트 난수이며 생성 또는 회전 응답에서 한 번만 제공합니다. DB에는 SHA-256 hash만 저장하고 token 회전 시 기존 방문자 세션을 즉시 폐기합니다.
-- `/s/:token`은 유효한 링크를 HttpOnly 방문자 세션으로 교환해 `/share/:id`로 이동합니다. 세션은 30분 유휴·12시간 절대 만료이고, 모든 공개 일정 요청이 현재 공유의 폐기·접근 시간·캘린더·날짜 정책을 다시 확인합니다.
+- 일정 날짜 `ALL`은 현재 동기화·보존된 과거 3개월부터 미래 3개월까지의 read model 전체를 제공합니다. `SELECTED`는 `Asia/Seoul` 달력 날짜의 양끝을 포함하고 일정 구간이 공유 날짜와 겹칠 때만 제공합니다. 접근 시작은 포함하고 종료는 배타적입니다.
+- 새 공유 링크 token은 별도 `SHARE_LINK_SECRET`, 공유 ID와 버전으로 HMAC-SHA-256 파생합니다. DB에는 token hash와 버전만 저장하고 관리자는 활성 주소를 목록에서 다시 복사할 수 있습니다. token 회전 시 기존 링크와 방문자 세션을 즉시 폐기합니다.
+- 새 주소 `/#share=:token`의 fragment는 첫 HTTP 요청에 포함되지 않으며 client가 즉시 지운 뒤 same-origin POST로 HttpOnly 방문자 세션을 만들어 `/share/:id`로 이동합니다. 기존 `/s/:token`도 호환됩니다. 세션은 30분 유휴·12시간 절대 만료이고, 모든 공개 일정 요청이 현재 공유의 폐기·접근 시간·캘린더·날짜 정책을 다시 확인합니다.
 - 관리자 API는 `/api/v1/admin/shares` 아래 CRUD·폐기·token 회전·미리보기를 제공하며, 미리보기와 `/api/v1/public/events`는 같은 정책 평가기를 사용합니다.
 
 ## 방문자 화면과 실시간 갱신

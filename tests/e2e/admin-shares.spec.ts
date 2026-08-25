@@ -72,14 +72,16 @@ test('creates, previews, edits, copies, and revokes a share', async ({
         name: String(payload.name),
         calendarScope: payload.calendarScope as 'ALL' | 'SELECTED',
         calendarIds: payload.calendarIds as string[],
-        eventStartDate: String(payload.eventStartDate),
-        eventEndDate: String(payload.eventEndDate),
+        eventDateScope: payload.eventDateScope as 'ALL' | 'SELECTED',
+        eventStartDate: payload.eventStartDate as string | null,
+        eventEndDate: payload.eventEndDate as string | null,
+        shareUrl: 'https://calendar.app.hurdoo.kr/#share=e2e-persistent-link',
       })
       return fulfillJson(
         route,
         {
           share: storedShare,
-          shareUrl: 'https://calendar.app.hurdoo.kr/s/e2e-one-time-link',
+          shareUrl: storedShare.shareUrl,
           token: 'not-rendered-separately',
         },
         201,
@@ -91,6 +93,7 @@ test('creates, previews, edits, copies, and revokes a share', async ({
         share: {
           id: shareId,
           name: storedShare?.name ?? '가족 공유',
+          eventDateScope: storedShare?.eventDateScope ?? 'SELECTED',
           eventStartDate: storedShare?.eventStartDate ?? '2026-08-25',
           eventEndDate: storedShare?.eventEndDate ?? '2026-09-25',
         },
@@ -121,11 +124,11 @@ test('creates, previews, edits, copies, and revokes a share', async ({
   await page.getByLabel('업무').uncheck()
   await page.getByRole('button', { name: '공유 만들기', exact: true }).click()
 
-  const linkNotice = page.locator('.link-notice')
-  await expect(linkNotice.getByLabel('공유 주소')).toHaveValue(
-    'https://calendar.app.hurdoo.kr/s/e2e-one-time-link',
+  const shareCard = page.locator('.share-card')
+  await expect(shareCard.getByLabel('가족 공유 공유 주소')).toHaveValue(
+    'https://calendar.app.hurdoo.kr/#share=e2e-persistent-link',
   )
-  await linkNotice.getByRole('button', { name: '링크 복사' }).click()
+  await shareCard.getByRole('button', { name: '링크 복사' }).click()
   await expect(page.getByText('공유 링크를 복사했습니다.')).toBeVisible()
 
   await page.getByRole('button', { name: '미리보기' }).click()
@@ -136,7 +139,9 @@ test('creates, previews, edits, copies, and revokes a share', async ({
   await page.getByRole('button', { name: '수정' }).click()
   await page.getByLabel('공유 이름').fill('수정된 가족 공유')
   await page.getByRole('button', { name: '변경 저장' }).click()
-  await expect(page.locator('.share-card').getByText('수정된 가족 공유')).toBeVisible()
+  await expect(
+    page.locator('.share-card').getByRole('heading', { name: '수정된 가족 공유' }),
+  ).toBeVisible()
 
   await page.getByRole('button', { name: '공유 종료' }).click()
   await expect(page.getByText('종료됨')).toBeVisible()
@@ -176,8 +181,10 @@ function shareFixture(
     name: string
     calendarScope: 'ALL' | 'SELECTED'
     calendarIds: string[]
-    eventStartDate: string
-    eventEndDate: string
+    eventDateScope: 'ALL' | 'SELECTED'
+    eventStartDate: string | null
+    eventEndDate: string | null
+    shareUrl: string | null
     accessStartsAt: string | null
     accessEndsAt: string | null
     revokedAt: string | null
@@ -190,8 +197,10 @@ function shareFixture(
     name: '가족 공유',
     calendarScope: 'SELECTED' as const,
     calendarIds: [calendarOne],
+    eventDateScope: 'SELECTED' as const,
     eventStartDate: '2026-08-25',
     eventEndDate: '2026-09-25',
+    shareUrl: 'https://calendar.app.hurdoo.kr/#share=e2e-persistent-link',
     accessStartsAt: null,
     accessEndsAt: null,
     revokedAt: null,

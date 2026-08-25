@@ -42,6 +42,7 @@ test('moves between calendar months with the keyboard', async ({ page }) => {
         share: {
           id: shareId,
           name: '키보드 달력',
+          eventDateScope: 'SELECTED',
           eventStartDate: '2026-07-01',
           eventEndDate: '2026-10-31',
         },

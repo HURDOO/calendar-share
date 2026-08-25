@@ -3,23 +3,24 @@ import { expect, test, type Page } from '@playwright/test'
 const shareId = '40000000-0000-4000-8000-000000000001'
 const shareToken = 'A'.repeat(43)
 
-test.beforeEach(async ({ browserName, page }) => {
+test.beforeEach(async ({ page }) => {
   await installMockEventSource(page)
-  if (browserName === 'chromium') {
-    await page.route(`**/s/${shareToken}`, async (route) => {
-      await route.fulfill({
-        headers: {
-          location: `/share/${shareId}`,
-          'set-cookie': 'calendar_visitor_session=fixture; HttpOnly; Path=/; SameSite=Lax',
-        },
-        status: 302,
-      })
+  await page.route('**/api/v1/public/session', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ token: shareToken })
+    expect(route.request().url()).not.toContain(shareToken)
+    expect(route.request().headers().origin).toBe('http://127.0.0.1:4177')
+    await route.fulfill({
+      body: JSON.stringify({ shareId }),
+      contentType: 'application/json',
+      headers: {
+        'set-cookie': 'calendar_visitor_session=fixture; HttpOnly; Path=/; SameSite=Lax',
+      },
+      status: 201,
     })
-  }
+  })
 })
 
 test('opens a token link as a clean mobile calendar and refreshes on SSE', async ({
-  browserName,
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -35,9 +36,7 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
     })
   })
 
-  await page.goto(
-    browserName === 'chromium' ? `/s/${shareToken}` : `/share/${shareId}`,
-  )
+  await page.goto(`/#share=${shareToken}`)
 
   await expect(page).toHaveURL(new RegExp(`/share/${shareId}$`))
   await expect(page.getByRole('heading', { name: '가족 공유' })).toBeVisible()
@@ -61,7 +60,7 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
   expect(requestCount).toBe(2)
 })
 
-test('shows the monthly calendar on a wide screen', async ({ browserName, page }) => {
+test('shows the monthly calendar on a wide screen', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.route('**/api/v1/public/events', async (route) => {
     await route.fulfill({
@@ -71,9 +70,7 @@ test('shows the monthly calendar on a wide screen', async ({ browserName, page }
     })
   })
 
-  await page.goto(
-    browserName === 'chromium' ? `/s/${shareToken}` : `/share/${shareId}`,
-  )
+  await page.goto(`/#share=${shareToken}`)
 
   await expect(page.locator('.desktop-calendar')).toBeVisible()
   await expect(page.locator('.visitor-list')).toBeHidden()
@@ -127,6 +124,7 @@ function publicData(title: string) {
     share: {
       id: shareId,
       name: '가족 공유',
+      eventDateScope: 'SELECTED',
       eventStartDate: '2026-08-01',
       eventEndDate: '2026-08-31',
     },

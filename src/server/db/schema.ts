@@ -203,8 +203,12 @@ export const shareLinks = sqliteTable(
       .notNull()
       .default('ALL'),
     tokenHash: text('token_hash').notNull(),
-    eventStartDate: text('event_start_date').notNull(),
-    eventEndDate: text('event_end_date').notNull(),
+    tokenVersion: integer('token_version'),
+    eventDateScope: text('event_date_scope', { enum: ['ALL', 'SELECTED'] })
+      .notNull()
+      .default('SELECTED'),
+    eventStartDate: text('event_start_date'),
+    eventEndDate: text('event_end_date'),
     accessStartsAt: integer('access_starts_at', { mode: 'timestamp_ms' }),
     accessEndsAt: integer('access_ends_at', { mode: 'timestamp_ms' }),
     revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
@@ -225,11 +229,26 @@ export const shareLinks = sqliteTable(
     ),
     check(
       'share_links_event_date_range',
-      sql`length(${table.eventStartDate}) = 10
+      sql`(
+        ${table.eventDateScope} = 'ALL'
+        and ${table.eventStartDate} is null
+        and ${table.eventEndDate} is null
+      ) or (
+        ${table.eventDateScope} = 'SELECTED'
+        and length(${table.eventStartDate}) = 10
         and length(${table.eventEndDate}) = 10
         and ${table.eventStartDate} = date(${table.eventStartDate})
         and ${table.eventEndDate} = date(${table.eventEndDate})
-        and ${table.eventEndDate} >= ${table.eventStartDate}`,
+        and ${table.eventEndDate} >= ${table.eventStartDate}
+      )`,
+    ),
+    check(
+      'share_links_event_date_scope',
+      sql`${table.eventDateScope} in ('ALL', 'SELECTED')`,
+    ),
+    check(
+      'share_links_token_version',
+      sql`${table.tokenVersion} is null or ${table.tokenVersion} > 0`,
     ),
     check(
       'share_links_access_range',

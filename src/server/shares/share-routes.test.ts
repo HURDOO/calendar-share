@@ -41,6 +41,9 @@ describe('share routes', () => {
       },
       appBaseUrl: appOrigin,
       database: createTestDatabase(),
+      share: {
+        linkSecret: encodeSecretMaterial(new Uint8Array(32).fill(14)),
+      },
       secureCookies: true,
       timeZone: 'Asia/Seoul',
     })
@@ -97,7 +100,7 @@ describe('share routes', () => {
 
     expect(created.statusCode).toBe(201)
     expect(body.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
-    expect(body.shareUrl).toBe(`${appOrigin}/s/${body.token}`)
+    expect(body.shareUrl).toBe(`${appOrigin}/#share=${body.token}`)
     const stored = app.database.sqlite
       .prepare('select token_hash from share_links where id = ?')
       .get(body.share.id) as { token_hash: string }
@@ -108,16 +111,30 @@ describe('share routes', () => {
       url: '/api/v1/admin/shares',
       headers: { cookie: adminCookie },
     })
-    expect(list.body).not.toContain(body.token)
-    expect(list.json<{ shares: unknown[] }>().shares).toHaveLength(1)
+    expect(list.body).toContain(body.token)
+    expect(
+      list.json<{ shares: Array<{ shareUrl: string }> }>().shares[0]?.shareUrl,
+    ).toBe(body.shareUrl)
 
-    const exchanged = await app.inject({
+    const legacyExchange = await app.inject({
       method: 'GET',
       url: `/s/${body.token}`,
     })
+    expect(legacyExchange.statusCode).toBe(302)
+    expect(legacyExchange.headers.location).toBe(`/share/${body.share.id}`)
+    expect(cookieByName(legacyExchange, VISITOR_SESSION_COOKIE)).toContain(
+      VISITOR_SESSION_COOKIE,
+    )
+
+    const exchanged = await app.inject({
+      method: 'POST',
+      url: '/api/v1/public/session',
+      headers: { origin: appOrigin },
+      payload: { token: body.token },
+    })
     const visitorCookie = cookieByName(exchanged, VISITOR_SESSION_COOKIE)
-    expect(exchanged.statusCode).toBe(302)
-    expect(exchanged.headers.location).toBe(`/share/${body.share.id}`)
+    expect(exchanged.statusCode).toBe(201)
+    expect(exchanged.json()).toEqual({ shareId: body.share.id })
     expect(allSetCookies(exchanged).join(';')).toContain('HttpOnly')
     expect(allSetCookies(exchanged).join(';')).toContain('Secure')
     expect(exchanged.headers['referrer-policy']).toBe('no-referrer')
@@ -171,12 +188,20 @@ describe('share routes', () => {
       method: 'GET',
       url: `/s/${invalidToken}`,
     })
+    const rejectedExchange = await app.inject({
+      method: 'POST',
+      url: '/api/v1/public/session',
+      headers: { origin: 'https://attacker.example' },
+      payload: { token: invalidToken },
+    })
 
     expect(rejected.statusCode).toBe(403)
     expect(rejected.json()).toEqual({ code: 'CSRF_REJECTED' })
     expect(invalid.statusCode).toBe(302)
     expect(invalid.headers.location).toBe('/share/unavailable')
     expect(invalid.body).not.toContain(invalidToken)
+    expect(rejectedExchange.statusCode).toBe(403)
+    expect(rejectedExchange.body).not.toContain(invalidToken)
   })
 
   it('uses the same policy result for administrator preview', async () => {

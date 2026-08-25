@@ -10,6 +10,7 @@ const callbackQuerySchema = z.object({
   error: z.string().max(512).optional(),
   state: z.string().min(1).max(512).optional(),
 })
+const syncJobParamsSchema = z.object({ jobId: z.string().uuid() })
 
 interface GoogleRoutesOptions {
   readonly secureCookie: boolean
@@ -98,8 +99,33 @@ export async function registerGoogleRoutes(
       return reply.code(409).send({ code: 'GOOGLE_NOT_CONNECTED' })
     }
 
-    app.googleFeature.queue.enqueue('RECOVERY_SYNC', 'recovery-sync')
-    return reply.code(202).send({ queued: true })
+    const job = app.googleFeature.queue.enqueueTracked(
+      'RECOVERY_SYNC',
+      'recovery-sync',
+    )
+    return reply.code(202).send({
+      jobId: job.id,
+      queued: job.enqueued,
+    })
+  })
+
+  app.get('/api/v1/admin/google/sync/:jobId', async (request, reply) => {
+    setPrivateResponseHeaders(reply)
+    if (!app.adminAuth.requireSession(request, reply)) {
+      return reply
+    }
+    const parsed = syncJobParamsSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(400).send({ code: 'INVALID_REQUEST' })
+    }
+    const job = app.googleFeature.queue.status(parsed.data.jobId)
+    if (!job || job.kind !== 'RECOVERY_SYNC') {
+      return reply.code(404).send({ code: 'SYNC_JOB_NOT_FOUND' })
+    }
+    return {
+      ...job,
+      lastSyncedAt: app.googleFeature.status().lastSyncedAt,
+    }
   })
 
   app.delete('/api/v1/admin/google/connection', async (request, reply) => {

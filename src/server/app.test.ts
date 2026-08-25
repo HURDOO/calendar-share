@@ -30,6 +30,9 @@ describe('server foundation', () => {
       },
       appBaseUrl: 'http://localhost:8464',
       database: createTestDatabase(),
+      share: {
+        linkSecret: encodeSecretMaterial(new Uint8Array(32).fill(14)),
+      },
       ...options,
     })
     apps.push(app)

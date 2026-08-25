@@ -53,6 +53,9 @@ describe('Google administrator routes', () => {
       },
       appBaseUrl: appOrigin,
       database: createTestDatabase(),
+      share: {
+        linkSecret: encodeSecretMaterial(new Uint8Array(32).fill(14)),
+      },
       google: {
         adapter,
         clientId: 'fixture-client-id',
@@ -152,6 +155,17 @@ describe('Google administrator routes', () => {
       url: '/api/v1/admin/google/sync',
       headers,
     })
+    const queuedBody = queued.json<{ jobId: string; queued: boolean }>()
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/google/sync/${queuedBody.jobId}`,
+      headers: { cookie },
+    })
+    const deduplicated = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/google/sync',
+      headers,
+    })
     const disconnected = await app.inject({
       method: 'DELETE',
       url: '/api/v1/admin/google/connection',
@@ -159,6 +173,18 @@ describe('Google administrator routes', () => {
     })
 
     expect(queued.statusCode).toBe(202)
+    expect(queuedBody).toMatchObject({ queued: true })
+    expect(queuedBody.jobId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(status.statusCode).toBe(200)
+    expect(status.json()).toMatchObject({
+      id: queuedBody.jobId,
+      kind: 'RECOVERY_SYNC',
+      status: 'PENDING',
+    })
+    expect(deduplicated.json()).toEqual({
+      jobId: queuedBody.jobId,
+      queued: false,
+    })
     expect(disconnected.statusCode).toBe(204)
     expect(app.googleFeature.connection.status().connected).toBe(false)
     expect(

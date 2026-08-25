@@ -16,6 +16,12 @@ interface GoogleStatusResponse {
   readonly queue: Record<string, number>
 }
 
+interface GoogleSyncJobResponse {
+  readonly status: 'PENDING' | 'RUNNING' | 'RETRY' | 'SUCCEEDED' | 'FAILED'
+  readonly finishedAt: string | null
+  readonly lastErrorCategory: string | null
+}
+
 type SessionState =
   | { readonly status: 'loading' }
   | { readonly status: 'anonymous' }
@@ -198,14 +204,68 @@ export function AdminApp() {
         credentials: 'same-origin',
         headers: { 'X-CSRF-Token': session.csrfToken },
       })
+      if (!response.ok) {
+        setMessage('동기화를 요청하지 못했습니다.')
+        return
+      }
+      const body = (await response.json()) as { jobId: string; queued: boolean }
       setMessage(
-        response.ok
-          ? '복구 동기화를 요청했습니다.'
-          : '동기화를 요청하지 못했습니다.',
+        body.queued
+          ? '복구 동기화가 대기 중입니다.'
+          : '이미 진행 중인 복구 동기화를 확인하고 있습니다.',
       )
+      await monitorGoogleSync(body.jobId)
+    } catch {
+      setMessage('동기화 결과를 확인하지 못했습니다.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function monitorGoogleSync(jobId: string) {
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const response = await fetch(`/api/v1/admin/google/sync/${jobId}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      })
+      if (!response.ok) {
+        throw new Error('sync-status-failed')
+      }
+      const job = (await response.json()) as GoogleSyncJobResponse
+      if (job.status === 'PENDING') {
+        setMessage('복구 동기화가 대기 중입니다.')
+        await delay(1_000)
+        continue
+      }
+      if (job.status === 'RUNNING') {
+        setMessage('복구 동기화를 진행하고 있습니다.')
+        await delay(1_000)
+        continue
+      }
+      if (job.status === 'RETRY') {
+        setMessage('일시적인 오류로 복구 동기화를 다시 시도하고 있습니다.')
+        await delay(1_000)
+        continue
+      }
+      if (job.status === 'FAILED') {
+        setMessage(`복구 동기화에 실패했습니다. ${syncErrorLabel(job.lastErrorCategory)}`)
+        return
+      }
+
+      setMessage(`복구 동기화를 완료했습니다. ${formatDateTime(job.finishedAt)}`)
+      const statusResponse = await fetch('/api/v1/admin/google/status', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      })
+      if (statusResponse.ok) {
+        setGoogle({
+          status: 'ready',
+          value: (await statusResponse.json()) as GoogleStatusResponse,
+        })
+      }
+      return
+    }
+    setMessage('동기화가 계속 진행 중입니다. 잠시 후 상태를 다시 확인해 주세요.')
   }
 
   async function handleGoogleDisconnect() {
@@ -396,4 +456,22 @@ function formatDateTime(value: string | null): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function syncErrorLabel(value: string | null): string {
+  switch (value) {
+    case 'GOOGLE_AUTH':
+      return 'Google 계정을 다시 연결해 주세요.'
+    case 'GOOGLE_PERMISSION':
+      return 'Google Calendar 읽기 권한을 확인해 주세요.'
+    case 'GOOGLE_RATE_LIMIT':
+    case 'GOOGLE_TRANSIENT':
+      return 'Google API가 일시적으로 응답하지 않았습니다.'
+    default:
+      return '서버 로그에서 안전한 오류 코드를 확인해 주세요.'
+  }
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }

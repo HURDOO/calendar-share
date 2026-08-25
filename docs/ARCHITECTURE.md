@@ -44,7 +44,8 @@ Reverse proxy (TLS, 요청 제한)
 Fastify 단일 프로세스
   +-- React/Vite 정적 자산
   +-- /api/v1/admin/*  관리자 API
-  +-- /s/:token        공유 토큰 교환
+  +-- /#share=:token   client가 fragment 제거 후 방문자 세션 교환
+  +-- /s/:token        기존 공유 링크 호환 교환
   +-- /api/v1/public/* 방문자 API + SSE
   +-- /api/v1/google/webhook
   +-- 동기화/채널 갱신 스케줄러
@@ -76,7 +77,7 @@ Google 계약 근거:
 - `config`: 환경변수 스키마 검증. 누락된 필수 비밀값이 있으면 fail fast한다.
 - `db`: SQLite 연결, WAL/foreign key/busy timeout 설정, 마이그레이션, 트랜잭션.
 - `auth/admin`: 비밀번호 검증, 로그인 속도 제한, 관리자 세션 생성·폐기, CSRF 방어.
-- `auth/share`: 원문 공유 토큰 해시 조회, 접근 시간 검증, 제한된 방문자 세션 교환.
+- `auth/share`: 원문 공유 토큰 해시 조회, fragment POST 또는 레거시 경로 교환, 접근 시간 검증, 제한된 방문자 세션 발급.
 - `google/oauth`: authorization URL, callback state 검증, refresh token 암호화 저장·회전.
 - `google/sync`: 전체/증분 동기화, 페이지네이션, 410 재동기화, 삭제와 반복 일정 처리.
 - `google/watch`: 채널 생성·검증·갱신·중지와 webhook 처리.
@@ -97,7 +98,7 @@ Google 계약 근거:
 - `google_connections`: 단일 연결, 암호화 refresh token, scopes, 연결/오류 상태.
 - `calendars`: Google ID, 이름, 색상, 시간대, 선택 가능/삭제 상태, sync token, 동기화 시각.
 - `events`: `(calendar_id, google_event_id)` 고유키, 상태, 시작/종료 또는 종일 날짜, 원본 시간대, 반복 연결, visibility, 제목, 장소, 일반 텍스트 설명, etag/updated. 참석자·주최자 연락처·첨부·회의 정보와 원문 payload는 저장하지 않는다.
-- `share_links`: ID, 이름, `calendar_scope` (`ALL`/`SELECTED`), token hash 고유키, 일정 날짜 범위, 접근 시간 범위, 폐기 시각, 생성/수정 시각.
+- `share_links`: ID, 이름, `calendar_scope` (`ALL`/`SELECTED`), token hash 고유키와 파생 버전, `event_date_scope` (`ALL`/`SELECTED`)와 선택 날짜 범위, 접근 시간 범위, 폐기 시각, 생성/수정 시각. 기존 행은 token 버전이 `NULL`이라 링크 교환은 유지하되 관리자 재표시는 회전 뒤 가능하다.
 - `share_calendars`: `SELECTED` 공유의 `(share_id, calendar_id)` 허용 목록. `ALL` 공유는 이 목록 대신 조회 시 활성 캘린더 전체를 사용하므로 새 캘린더도 자동 포함한다.
 - `admin_sessions`: token hash, 만료, 마지막 사용, 폐기 시각.
 - `visitor_sessions`: 공유 token 교환 뒤 사용하는 token hash, 연결된 공유, 만료, 마지막 사용, 폐기 시각.
@@ -113,9 +114,10 @@ Google 계약 근거:
 | 경로군 | 책임 | 인증 |
 | --- | --- | --- |
 | `POST/DELETE /api/v1/admin/session` | 로그인/로그아웃 | 로그인은 공개+rate limit, 로그아웃은 관리자 세션 |
-| `/api/v1/admin/google/*` | Google 연결, callback, 상태, 수동 복구 | 관리자 세션; callback은 OAuth state |
+| `/api/v1/admin/google/*` | Google 연결, callback, 상태, 수동 복구 등록과 작업 결과 조회 | 관리자 세션; callback은 OAuth state |
 | `/api/v1/admin/shares/*` | 공유 CRUD와 미리보기 | 관리자 세션 + CSRF |
-| `GET /s/:token` | 토큰 검증, 방문자 세션 설정, clean URL redirect | 원문 토큰 |
+| `POST /api/v1/public/session` | fragment에서 꺼낸 토큰 검증, 방문자 세션 설정, share ID 반환 | exact Origin + JSON 원문 토큰 |
+| `GET /s/:token` | 기존 링크 토큰 검증, 방문자 세션 설정, clean URL redirect | 레거시 원문 토큰 |
 | `/api/v1/public/events` | 허용된 일정만 조회 | 방문자 세션 + 매 요청 정책 검증 |
 | `/api/v1/public/stream` | 데이터 없는 갱신 신호 | 방문자 세션 + 매 연결 정책 검증 |
 | `POST /api/v1/google/webhook` | Google 알림 검증·작업 등록 | Google 채널 헤더 + 저장된 채널 token |
@@ -135,11 +137,12 @@ Google 계약 근거:
 
 ### 방문자
 
-- 공유 링크 원문 토큰은 최소 256비트다. DB에는 SHA-256 또는 keyed hash만 저장하고 상수 시간 비교를 사용한다.
-- `/s/:token` 검증 성공 시 share ID와 만료를 가진 서버 저장형 HttpOnly 세션으로 교환되고 `/share/:publicId`로 redirect한다. 세션은 30분 유휴·12시간 절대 만료이며 접근 종료가 더 빠르면 서버 만료도 그 시각으로 제한한다.
+- 새 공유 링크 원문 토큰은 별도 256비트 `SHARE_LINK_SECRET`과 공유 ID·양의 버전을 HMAC-SHA-256에 넣어 256비트로 파생한다. DB에는 SHA-256 hash와 버전만 저장하고 상수 시간 비교를 사용한다.
+- 새 URL은 `/#share=:token`이다. fragment는 첫 HTTP 요청과 Referer에 포함되지 않으며 client bootstrap이 render 전에 제거한다. 이후 exact-origin `POST /api/v1/public/session`으로 교환해 `/share/:publicId`로 정리한다. `/s/:token`은 기존 배포 링크 호환을 위해 같은 교환 정책으로 유지한다.
+- 검증 성공 시 share ID와 만료를 가진 서버 저장형 HttpOnly 세션을 설정한다. 세션은 30분 유휴·12시간 절대 만료이며 접근 종료가 더 빠르면 서버 만료도 그 시각으로 제한한다.
 - 이후 모든 조회는 세션 서명뿐 아니라 현재 공유 row의 폐기/시간/캘린더/일정 범위를 다시 확인한다. 링크 폐기는 즉시 효력을 갖는다.
-- 원문 token은 생성 또는 회전 응답에서 한 번만 제공한다. 관리자가 링크를 다시 발급하면 token hash를 교체하고 해당 공유의 기존 방문자 세션을 모두 폐기한다.
-- URL, access log, analytics, Referer에 원문 토큰이 남지 않도록 reverse proxy와 앱 로깅에서 경로를 redaction한다.
+- 관리자는 인증된 공유 목록에서 현재 token 버전과 `SHARE_LINK_SECRET`으로 재구성된 주소를 다시 확인한다. 링크 회전은 버전을 올리고 token hash를 교체하며 해당 공유의 기존 방문자 세션을 모두 폐기한다.
+- URL fragment는 브라우저 기록에서 즉시 제거하고 `/s/:token` 같은 레거시 경로, request body, access log, analytics에서 원문 토큰이 남지 않도록 reverse proxy와 앱 로깅을 redaction한다.
 - 모든 동적·HTML 응답은 `no-store`, fingerprint `/assets/*`만 1년 immutable cache를 사용한다. CSP의 script는 same-origin으로 제한하고 frame·object·권한 API를 차단하며 `no-referrer`, `nosniff`, `noindex`를 전역 적용한다. HSTS는 TLS가 보장되는 운영에서만 활성화한다.
 
 ### Google
@@ -153,6 +156,7 @@ Google 계약 근거:
 - 오류 분류: 사용자 입력 4xx, 인증/권한 401·403, 만료/폐기 공개 오류, Google rate limit/일시 오류, 영구 OAuth 오류, DB 오류.
 - Google 429/5xx는 지수 backoff와 jitter로 재시도한다. 인증 취소나 권한 부족은 자동 무한 재시도하지 않고 관리자 화면에 조치 상태를 표시한다.
 - 동기화 작업은 dedupe key와 트랜잭션 upsert로 멱등성을 보장한다.
+- 수동 복구 동기화 등록은 새 작업 또는 이미 활성인 작업 ID를 반환한다. 관리자 UI는 인증된 상태 endpoint를 polling해 대기·진행·재시도·성공·실패 결과를 표시한다.
 - 구조화 로그 필드: timestamp, level, request_id/job_id, route template, result, duration, safe error code. 토큰·이벤트 상세·비밀번호는 제외한다.
 - 최소 지표: 마지막 성공 동기화, 캘린더별 lag, queue depth, 실패 횟수, watch 만료까지 남은 시간, 공개 API latency.
 - readiness는 DB 읽기/쓰기 가능성과 마이그레이션 상태를 확인하되 Google 장애만으로 프로세스를 재시작 루프에 넣지 않는다.
@@ -174,10 +178,10 @@ Google 계약 근거:
 - 개발 시 Vite dev server는 `http://localhost:8464`에서 `http://127.0.0.1:8465`의 Fastify API로 proxy하고, 프로덕션에서는 Fastify가 Vite 빌드 결과를 같은 origin으로 제공한다.
 - deployd가 제공하는 예약 환경변수는 `APP_BASE_URL`, `STORAGE_DIR`, `NODE_ENV`, `HOST`, `PORT`다. 프로덕션 origin은 `APP_BASE_URL=https://calendar.app.hurdoo.kr`, SQLite 경로는 `${STORAGE_DIR}/calendar-share.db`에서 파생하며 `deploy.json`에서 이 키들을 재선언하지 않는다.
 - reviewable visible environment는 `APP_TIME_ZONE=Asia/Seoul`, `LOG_LEVEL=info`, 바로 앞 reverse proxy allowlist인 `TRUST_PROXY`다.
-- names-only 필수 secret 계약은 `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`다. 실제 값은 저장소, handoff JSON, 로그, 명령 인자에 넣지 않고 사용자가 deployd 대시보드 **Secrets**에 직접 입력한다.
+- names-only 필수 secret 계약은 `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, `SHARE_LINK_SECRET`이다. 실제 값은 저장소, handoff JSON, 로그, 명령 인자에 넣지 않고 사용자가 deployd 대시보드 **Secrets**에 직접 입력한다.
 - 로컬 개발의 `GOOGLE_CLIENT_ID`와 `GOOGLE_CLIENT_SECRET`은 사용자가 관리하는 gitignored `.env.local`에서 애플리케이션만 로드한다. Codex는 파일 내용을 열거나 출력·검색·복사하지 않는다.
 - OAuth callback은 프로덕션에서 `${APP_BASE_URL}/api/v1/admin/google/callback`, 로컬 개발에서 `http://localhost:8464/api/v1/admin/google/callback`을 사용한다. Calendar webhook은 공개 HTTPS가 필요한 `${APP_BASE_URL}/api/v1/google/webhook`만 사용한다.
-- 구현 작업에서 숨김 입력을 사용하는 `admin:hash-password`와 256비트 `SESSION_SECRET`/`GOOGLE_TOKEN_ENCRYPTION_KEY` 생성 CLI, 빈 `.env.example`, 런타임 검증 스키마를 함께 만든다. Codex는 생성된 실제 값을 읽거나 대신 등록하지 않는다.
+- 구현 작업에서 숨김 입력을 사용하는 `admin:hash-password`와 256비트 `SESSION_SECRET`/`GOOGLE_TOKEN_ENCRYPTION_KEY`/`SHARE_LINK_SECRET` 생성 CLI, 빈 `.env.example`, 런타임 검증 스키마를 함께 만든다. 각 용도의 secret은 `pnpm secret:generate`를 따로 실행해 재사용하지 않는다. Codex는 생성된 실제 값을 읽거나 대신 등록하지 않는다.
 - 실행 명령은 package scripts가 실제로 생성된 뒤 README에 기록한다.
 
 ## 11. 배포와 롤백

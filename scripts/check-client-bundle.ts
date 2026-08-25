@@ -15,6 +15,7 @@ const forbiddenPatterns = [
   { name: 'Google OAuth secret name', value: /GOOGLE_CLIENT_SECRET/ },
   { name: 'Google token key secret name', value: /GOOGLE_TOKEN_ENCRYPTION_KEY/ },
   { name: 'session secret name', value: /SESSION_SECRET/ },
+  { name: 'share link secret name', value: /SHARE_LINK_SECRET/ },
 ] as const
 
 const files = await listFiles(clientDir)

@@ -44,6 +44,31 @@ describe('PublicCalendarApp', () => {
     expect(await screen.findByText('공유된 일정이 없어요')).toBeInTheDocument()
   })
 
+  it('renders the complete retained dataset without fixed date boundaries', async () => {
+    vi.stubGlobal('EventSource', undefined)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse(
+          calendarData({
+            share: {
+              id: shareId,
+              name: '전체 일정',
+              eventDateScope: 'ALL',
+              eventStartDate: null,
+              eventEndDate: null,
+            },
+          }),
+        ),
+      ),
+    )
+
+    render(<PublicCalendarApp expectedShareId={shareId} />)
+
+    expect(await screen.findByText('전체 데이터')).toBeInTheDocument()
+    expect(screen.getAllByText('저녁 식사').length).toBeGreaterThan(0)
+  })
+
   it('shows an unavailable state without disclosing a reason', async () => {
     vi.stubGlobal('EventSource', undefined)
     vi.stubGlobal(
@@ -132,6 +157,7 @@ function calendarData(
     share: {
       id: shareId,
       name: '가족 일정',
+      eventDateScope: 'SELECTED',
       eventStartDate: '2026-08-01',
       eventEndDate: '2026-08-31',
     },

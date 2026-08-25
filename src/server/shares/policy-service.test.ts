@@ -29,6 +29,7 @@ describe('SharePolicyService', () => {
     const shares = new ShareService(
       database,
       'https://calendar.app.hurdoo.kr',
+      Buffer.alloc(32, 15).toString('base64url'),
       () => now,
     )
     return { database, policy, shares }
@@ -151,6 +152,7 @@ describe('SharePolicyService', () => {
     const firstHash = database.sqlite
       .prepare('select token_hash from share_links where id = ?')
       .get(created.share.id) as { token_hash: string }
+    expect(shares.get(created.share.id)?.shareUrl).toBe(created.shareUrl)
 
     const rotated = shares.rotateToken(created.share.id)
     const secondHash = database.sqlite
@@ -161,8 +163,27 @@ describe('SharePolicyService', () => {
     expect(secondHash.token_hash).not.toContain(rotated.token)
     expect(secondHash.token_hash).not.toBe(firstHash.token_hash)
     expect(created.shareUrl).toBe(
-      `https://calendar.app.hurdoo.kr/s/${created.token}`,
+      `https://calendar.app.hurdoo.kr/#share=${created.token}`,
     )
+    expect(shares.get(created.share.id)?.shareUrl).toBe(rotated.shareUrl)
+    expect(rotated.share.shareUrl).toBe(rotated.shareUrl)
+  })
+
+  it('can expose every event in the retained read model without date boundaries', () => {
+    const { database, policy, shares } = setup()
+    seedEvent(database, calendarOne, 'outside-selected-range', '전체 범위 일정')
+    const share = shares.create(
+      writeInput({
+        eventDateScope: 'ALL',
+        eventStartDate: null,
+        eventEndDate: null,
+      }),
+    )
+
+    expect(policy.evaluate(share.share.id)).toMatchObject({
+      share: { eventDateScope: 'ALL', eventStartDate: null, eventEndDate: null },
+      events: [{ title: '전체 범위 일정' }],
+    })
   })
 })
 
@@ -174,6 +195,7 @@ function writeInput(
     accessStartsAt: null,
     calendarIds: [],
     calendarScope: 'ALL',
+    eventDateScope: 'SELECTED',
     eventEndDate: '2026-08-25',
     eventStartDate: '2026-08-25',
     name: '가족 공유',

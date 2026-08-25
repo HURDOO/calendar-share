@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
-import { generateSecret, hashSecret } from '../../shared/secrets'
+import { hashSecret, secretsMatch } from '../../shared/secrets'
 import type { AppDatabase } from '../db/database'
+import { ShareLinkTokenFactory } from './share-link-token'
 import {
   type ShareView,
   type ShareWriteInput,
@@ -13,8 +14,10 @@ interface ShareRow {
   readonly name: string
   readonly calendar_scope: 'ALL' | 'SELECTED'
   readonly token_hash: string
-  readonly event_start_date: string
-  readonly event_end_date: string
+  readonly token_version: number | null
+  readonly event_date_scope: 'ALL' | 'SELECTED'
+  readonly event_start_date: string | null
+  readonly event_end_date: string | null
   readonly access_starts_at: number | null
   readonly access_ends_at: number | null
   readonly revoked_at: number | null
@@ -30,11 +33,16 @@ export class ShareServiceError extends Error {
 }
 
 export class ShareService {
+  private readonly tokenFactory: ShareLinkTokenFactory
+
   constructor(
     private readonly database: AppDatabase,
     private readonly appBaseUrl: string,
+    linkSecret: string,
     private readonly now: () => Date = () => new Date(),
-  ) {}
+  ) {
+    this.tokenFactory = new ShareLinkTokenFactory(linkSecret)
+  }
 
   create(rawInput: ShareWriteInput): {
     readonly share: ShareView
@@ -44,21 +52,25 @@ export class ShareService {
     const input = shareWriteSchema.parse(rawInput)
     this.assertCalendars(input.calendarIds)
     const id = randomUUID()
-    const token = generateSecret()
+    const tokenVersion = 1
+    const token = this.tokenFactory.create(id, tokenVersion)
     const now = this.now().getTime()
     const create = this.database.sqlite.transaction(() => {
       this.database.sqlite
         .prepare(`
           insert into share_links (
-            id, name, calendar_scope, token_hash, event_start_date,
-            event_end_date, access_starts_at, access_ends_at, created_at, updated_at
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, name, calendar_scope, token_hash, token_version,
+            event_date_scope, event_start_date, event_end_date,
+            access_starts_at, access_ends_at, created_at, updated_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
           id,
           input.name,
           input.calendarScope,
           hashSecret(token),
+          tokenVersion,
+          input.eventDateScope,
           input.eventStartDate,
           input.eventEndDate,
           parseOptionalInstant(input.accessStartsAt),
@@ -70,10 +82,11 @@ export class ShareService {
     })
     create()
 
+    const share = this.requireView(id)
     return {
-      share: this.requireView(id),
+      share,
       token,
-      shareUrl: this.shareUrl(token),
+      shareUrl: share.shareUrl ?? this.shareUrl(token),
     }
   }
 
@@ -98,14 +111,15 @@ export class ShareService {
       this.database.sqlite
         .prepare(`
           update share_links set
-            name = ?, calendar_scope = ?, event_start_date = ?,
-            event_end_date = ?, access_starts_at = ?, access_ends_at = ?,
-            updated_at = ?
+            name = ?, calendar_scope = ?, event_date_scope = ?,
+            event_start_date = ?, event_end_date = ?, access_starts_at = ?,
+            access_ends_at = ?, updated_at = ?
           where id = ?
         `)
         .run(
           input.name,
           input.calendarScope,
+          input.eventDateScope,
           input.eventStartDate,
           input.eventEndDate,
           parseOptionalInstant(input.accessStartsAt),
@@ -138,17 +152,24 @@ export class ShareService {
     revoke()
   }
 
-  rotateToken(id: string): { readonly token: string; readonly shareUrl: string } {
+  rotateToken(id: string): {
+    readonly share: ShareView
+    readonly token: string
+    readonly shareUrl: string
+  } {
     const existing = this.requireRow(id)
     if (existing.revoked_at !== null) {
       throw new ShareServiceError('SHARE_REVOKED')
     }
-    const token = generateSecret()
+    const tokenVersion = (existing.token_version ?? 0) + 1
+    const token = this.tokenFactory.create(id, tokenVersion)
     const now = this.now().getTime()
     const rotate = this.database.sqlite.transaction(() => {
       this.database.sqlite
-        .prepare('update share_links set token_hash = ?, updated_at = ? where id = ?')
-        .run(hashSecret(token), now, id)
+        .prepare(
+          'update share_links set token_hash = ?, token_version = ?, updated_at = ? where id = ?',
+        )
+        .run(hashSecret(token), tokenVersion, now, id)
       this.database.sqlite
         .prepare(
           'update visitor_sessions set revoked_at = ? where share_id = ? and revoked_at is null',
@@ -156,11 +177,14 @@ export class ShareService {
         .run(now, id)
     })
     rotate()
-    return { token, shareUrl: this.shareUrl(token) }
+    const share = this.requireView(id)
+    return { share, token, shareUrl: share.shareUrl ?? this.shareUrl(token) }
   }
 
   private shareUrl(token: string): string {
-    return new URL(`/s/${encodeURIComponent(token)}`, this.appBaseUrl).toString()
+    const url = new URL('/', this.appBaseUrl)
+    url.hash = `share=${token}`
+    return url.toString()
   }
 
   private assertCalendars(calendarIds: string[]): void {
@@ -232,14 +256,27 @@ export class ShareService {
       name: row.name,
       calendarScope: row.calendar_scope,
       calendarIds: calendarIds.map((item) => item.calendar_id),
+      eventDateScope: row.event_date_scope,
       eventStartDate: row.event_start_date,
       eventEndDate: row.event_end_date,
+      shareUrl: this.recoverShareUrl(row),
       accessStartsAt: formatOptionalInstant(row.access_starts_at),
       accessEndsAt: formatOptionalInstant(row.access_ends_at),
       revokedAt: formatOptionalInstant(row.revoked_at),
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString(),
     }
+  }
+
+  private recoverShareUrl(row: ShareRow): string | null {
+    if (row.revoked_at !== null || row.token_version === null) {
+      return null
+    }
+
+    const token = this.tokenFactory.create(row.id, row.token_version)
+    return secretsMatch(hashSecret(token), row.token_hash)
+      ? this.shareUrl(token)
+      : null
   }
 }
 

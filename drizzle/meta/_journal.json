@@ -15,6 +15,13 @@
       "when": 1787598675891,
       "tag": "0001_google_sync_state",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787632758676,
+      "tag": "0002_hesitant_karen_page",
+      "breakpoints": true
     }
   ]
 }

@@ -12,8 +12,9 @@ interface SharePolicyRow {
   readonly id: string
   readonly name: string
   readonly calendar_scope: 'ALL' | 'SELECTED'
-  readonly event_start_date: string
-  readonly event_end_date: string
+  readonly event_date_scope: 'ALL' | 'SELECTED'
+  readonly event_start_date: string | null
+  readonly event_end_date: string | null
   readonly access_starts_at: number | null
   readonly access_ends_at: number | null
   readonly revoked_at: number | null
@@ -62,8 +63,9 @@ export interface SharePolicyResult {
   readonly share: {
     readonly id: string
     readonly name: string
-    readonly eventStartDate: string
-    readonly eventEndDate: string
+    readonly eventDateScope: 'ALL' | 'SELECTED'
+    readonly eventStartDate: string | null
+    readonly eventEndDate: string | null
   } | null
   readonly events: PolicyEvent[]
 }
@@ -84,6 +86,7 @@ export class SharePolicyService {
     const shareSummary = {
       id: share.id,
       name: share.name,
+      eventDateScope: share.event_date_scope,
       eventStartDate: share.event_start_date,
       eventEndDate: share.event_end_date,
     }
@@ -97,14 +100,47 @@ export class SharePolicyService {
       return { availability, share: shareSummary, events: [] }
     }
 
+    const placeholders = calendarIds.map(() => '?').join(', ')
+    const rows = share.event_date_scope === 'ALL'
+      ? (this.database.sqlite
+          .prepare(`
+            select
+              events.id, events.calendar_id, calendars.display_name as calendar_name,
+              calendars.color as calendar_color, events.is_all_day, events.starts_at,
+              events.ends_at, events.start_date, events.end_date,
+              events.start_time_zone, events.end_time_zone, events.visibility,
+              events.title, events.location, events.description
+            from events
+            join calendars on calendars.id = events.calendar_id
+            where events.calendar_id in (${placeholders})
+              and events.status <> 'CANCELLED'
+          `)
+          .all(...calendarIds) as EventRow[])
+      : this.selectedDateRows(share, calendarIds, placeholders)
+    const events = rows.map(toPolicyEvent)
+    events.sort((left, right) => {
+      const chronological =
+        eventSortValue(left, this.timeZone) - eventSortValue(right, this.timeZone)
+      return chronological || left.id.localeCompare(right.id)
+    })
+    return { availability, share: shareSummary, events }
+  }
+
+  private selectedDateRows(
+    share: SharePolicyRow,
+    calendarIds: string[],
+    placeholders: string,
+  ): EventRow[] {
+    if (!share.event_start_date || !share.event_end_date) {
+      return []
+    }
     const startInstant = zonedMidnightToInstant(
       share.event_start_date,
       this.timeZone,
     ).getTime()
     const endExclusiveDate = addDays(share.event_end_date, 1)
     const endInstant = zonedMidnightToInstant(endExclusiveDate, this.timeZone).getTime()
-    const placeholders = calendarIds.map(() => '?').join(', ')
-    const rows = this.database.sqlite
+    return this.database.sqlite
       .prepare(`
         select
           events.id, events.calendar_id, calendars.display_name as calendar_name,
@@ -129,19 +165,13 @@ export class SharePolicyService {
         share.event_start_date,
         endExclusiveDate,
       ) as EventRow[]
-    const events = rows.map(toPolicyEvent)
-    events.sort((left, right) => {
-      const chronological =
-        eventSortValue(left, this.timeZone) - eventSortValue(right, this.timeZone)
-      return chronological || left.id.localeCompare(right.id)
-    })
-    return { availability, share: shareSummary, events }
   }
 
   private shareRow(shareId: string): SharePolicyRow | undefined {
     return this.database.sqlite
       .prepare(`
-        select id, name, calendar_scope, event_start_date, event_end_date,
+        select id, name, calendar_scope, event_date_scope,
+               event_start_date, event_end_date,
                access_starts_at, access_ends_at, revoked_at
         from share_links where id = ?
       `)

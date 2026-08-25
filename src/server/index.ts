@@ -8,6 +8,7 @@ import { loadAdminAuthSecrets } from './auth/config'
 import { ConfigurationError, loadRuntimeConfig } from './config'
 import { databaseFilePath, openDatabase } from './db/database'
 import { loadGoogleSecrets } from './google/config'
+import { loadShareSecrets } from './shares/config'
 
 async function main() {
   if (
@@ -20,6 +21,7 @@ async function main() {
   const runtime = loadRuntimeConfig()
   const adminAuth = loadAdminAuthSecrets()
   const googleSecrets = loadGoogleSecrets()
+  const shareSecrets = loadShareSecrets()
   const publicDir =
     runtime.nodeEnv === 'production'
       ? resolve(fileURLToPath(new URL('../client', import.meta.url)))
@@ -33,6 +35,7 @@ async function main() {
       adminAuth,
       appBaseUrl: runtime.appBaseUrl,
       database,
+      share: shareSecrets,
       google: {
         ...googleSecrets,
         schedulerEnabled: true,

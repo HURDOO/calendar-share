@@ -74,6 +74,14 @@
 - 완료 조건: 토큰/비밀값 누출 검사, 핵심 키보드 흐름, 합의된 접근성 기준, 모바일/데스크톱 브라우저 matrix가 통과한다.
 - 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(87개), `pnpm build`, `pnpm security:bundle-check`, `pnpm audit --prod` 통과. `pnpm test:e2e`는 Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했다. 전역 CSP·no-store/noindex/referrer/nosniff/frame/HSTS 경계, fingerprint asset cache, 64KiB body limit, 500 오류 마스킹, proxy allowlist 기반 client IP rate limit과 비신뢰 forwarded header 무시, URL·인증 필드 로그 redaction, 클라이언트 bundle secret scan, axe WCAG A/AA 위반 0건, 키보드 로그인·공유 편집·월 이동, KakaoTalk형 UA·touch viewport·EventSource/clipboard fallback을 검증했다.
 
+## [x] T-009A 공유 링크·기간·수동 동기화 후속 보완
+
+- 범위: 수동 복구 동기화의 실제 결과 표시, 공개 일정 날짜의 전체 데이터/선택 기간 모드, 관리자 목록의 공유 주소 재확인, 방문자 SPA 진입 수정, fragment token 링크와 레거시 링크 호환을 구현한다.
+- 선행 조건: T-005~T-009, 별도 `SHARE_LINK_SECRET` 사용 결정.
+- 산출물: tracked sync 상태 API와 UI, 공유 날짜 mode migration, HMAC 파생 링크와 fragment 교환 API, 관리자 지속 링크 UI, 브라우저 회귀 테스트와 결정 기록.
+- 완료 조건: 새 링크가 HTTP URL에 token을 보내지 않고 `/share/:id` 달력을 열며 기존 `/s/:token`도 동작한다. 활성 주소는 관리자 화면에서 다시 복사 가능하고 전체 데이터 정책과 수동 sync terminal 결과가 표시된다.
+- 검증: 2026-08-25 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(99개), `pnpm build`, `pnpm security:bundle-check` 통과. `pnpm test:e2e`는 Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했다. 기존 share·allowlist·visitor session 보존 migration, `ALL` 날짜 정책, HMAC token 재구성·회전, fragment 즉시 제거·POST 교환·clean URL, 레거시 `/s` 교환, 공유 주소 재표시·복사, 수동 sync 작업 추적, Vite `/s` proxy가 `/share`를 가로채지 않는 회귀를 검증했다.
+
 ## [>] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.

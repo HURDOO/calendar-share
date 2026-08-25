@@ -10,6 +10,7 @@ import {
 } from './google/google-feature'
 import { registerResponsePolicy } from './security/response-policy'
 import { registerShareFeature } from './shares/share-feature'
+import type { ShareSecrets } from './shares/config'
 
 export const LOGGER_REDACTION_PATHS = [
   'req.headers.authorization',
@@ -33,6 +34,7 @@ interface BuildServerOptions {
   readonly adminAuth: Omit<RegisterAdminAuthOptions, 'appBaseUrl' | 'secureCookie'>
   readonly appBaseUrl: string
   readonly database: AppDatabase
+  readonly share: ShareSecrets
   readonly publicDir?: string
   readonly logger?: boolean
   readonly logLevel?: RuntimeConfig['logLevel']
@@ -107,6 +109,7 @@ export async function buildServer(options: BuildServerOptions) {
   await registerShareFeature(app, {
     appBaseUrl: options.appBaseUrl,
     database: options.database,
+    linkSecret: options.share.linkSecret,
     ...(options.adminAuth.now ? { now: options.adminAuth.now } : {}),
     secureCookie: options.secureCookies ?? false,
     timeZone: options.timeZone ?? 'Asia/Seoul',

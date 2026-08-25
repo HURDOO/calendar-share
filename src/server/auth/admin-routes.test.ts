@@ -43,6 +43,9 @@ describe('administrator authentication routes', () => {
       },
       appBaseUrl: appOrigin,
       database: createTestDatabase(),
+      share: {
+        linkSecret: encodeSecretMaterial(new Uint8Array(32).fill(14)),
+      },
       secureCookies: true,
       ...options,
     })

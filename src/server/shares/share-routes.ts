@@ -11,6 +11,9 @@ export const VISITOR_SESSION_COOKIE = 'calendar_visitor_session'
 const shareTokenParamsSchema = z.object({
   token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
 })
+const shareTokenBodySchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+})
 
 interface ShareRoutesOptions {
   readonly secureCookie: boolean
@@ -182,16 +185,26 @@ export async function registerShareRoutes(
       return reply.redirect('/share/unavailable')
     }
 
-    reply.setCookie(VISITOR_SESSION_COOKIE, exchanged.token, {
-      expires: exchanged.session.expiresAt,
-      httpOnly: true,
-      maxAge: exchanged.maxAgeSeconds,
-      path: '/',
-      priority: 'high',
-      sameSite: 'lax',
-      secure: options.secureCookie,
-    })
+    setVisitorCookie(reply, exchanged, options.secureCookie)
     return reply.redirect(`/share/${exchanged.session.shareId}`)
+  })
+
+  app.post('/api/v1/public/session', async (request, reply) => {
+    setExchangeHeaders(reply)
+    if (request.headers.origin !== app.adminAuth.expectedOrigin) {
+      clearVisitorCookie(reply, options.secureCookie)
+      return reply.code(403).send({ code: 'ORIGIN_REJECTED' })
+    }
+    const parsed = shareTokenBodySchema.safeParse(request.body)
+    const exchanged = parsed.success
+      ? app.shareFeature.visitors.exchangeShareToken(parsed.data.token)
+      : null
+    if (!exchanged) {
+      clearVisitorCookie(reply, options.secureCookie)
+      return reply.code(401).send({ code: 'SHARE_ACCESS_UNAVAILABLE' })
+    }
+    setVisitorCookie(reply, exchanged, options.secureCookie)
+    return reply.code(201).send({ shareId: exchanged.session.shareId })
   })
 
   app.get('/api/v1/public/events', async (request, reply) => {
@@ -319,6 +332,24 @@ function clearVisitorCookie(reply: FastifyReply, secure: boolean): void {
   reply.clearCookie(VISITOR_SESSION_COOKIE, {
     httpOnly: true,
     path: '/',
+    sameSite: 'lax',
+    secure,
+  })
+}
+
+function setVisitorCookie(
+  reply: FastifyReply,
+  exchanged: NonNullable<
+    ReturnType<FastifyInstance['shareFeature']['visitors']['exchangeShareToken']>
+  >,
+  secure: boolean,
+): void {
+  reply.setCookie(VISITOR_SESSION_COOKIE, exchanged.token, {
+    expires: exchanged.session.expiresAt,
+    httpOnly: true,
+    maxAge: exchanged.maxAgeSeconds,
+    path: '/',
+    priority: 'high',
     sameSite: 'lax',
     secure,
   })

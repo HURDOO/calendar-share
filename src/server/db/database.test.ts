@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+import BetterSqlite3 from 'better-sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AppDatabase } from './database'
@@ -52,6 +56,87 @@ describe('SQLite database foundation', () => {
 
     expect(before.count).toBeGreaterThanOrEqual(1)
     expect(after.count).toBe(before.count)
+  })
+
+  it('upgrades legacy shares without losing links, allowlists, or sessions', () => {
+    const sqlite = new BetterSqlite3(':memory:')
+    try {
+      sqlite.pragma('foreign_keys = ON')
+      applySqlMigration(sqlite, '0000_initial_schema.sql')
+      applySqlMigration(sqlite, '0001_google_sync_state.sql')
+      sqlite
+        .prepare("insert into google_connections (id, status) values (1, 'DISCONNECTED')")
+        .run()
+      sqlite
+        .prepare(`
+          insert into calendars (
+            id, connection_id, google_calendar_id, display_name
+          ) values ('legacy-calendar', 1, 'google-legacy', '기존 캘린더')
+        `)
+        .run()
+      sqlite
+        .prepare(`
+          insert into share_links (
+            id, name, calendar_scope, token_hash,
+            event_start_date, event_end_date, created_at, updated_at
+          ) values (
+            'legacy-share', '기존 공유', 'SELECTED', 'legacy-token-hash',
+            '2026-08-01', '2026-08-31', 1000, 1000
+          )
+        `)
+        .run()
+      sqlite
+        .prepare(`
+          insert into share_calendars (share_id, calendar_id, created_at)
+          values ('legacy-share', 'legacy-calendar', 1000)
+        `)
+        .run()
+      sqlite
+        .prepare(`
+          insert into visitor_sessions (
+            id, share_id, token_hash, expires_at, last_used_at, created_at
+          ) values (
+            'legacy-session', 'legacy-share', 'legacy-session-hash',
+            2000, 1000, 1000
+          )
+        `)
+        .run()
+
+      sqlite.exec('begin')
+      try {
+        applySqlMigration(sqlite, '0002_hesitant_karen_page.sql')
+        sqlite.exec('commit')
+      } catch (error) {
+        sqlite.exec('rollback')
+        throw error
+      }
+
+      expect(
+        sqlite
+          .prepare(`
+            select token_hash, token_version, event_date_scope,
+                   event_start_date, event_end_date
+            from share_links where id = 'legacy-share'
+          `)
+          .get(),
+      ).toEqual({
+        token_hash: 'legacy-token-hash',
+        token_version: null,
+        event_date_scope: 'SELECTED',
+        event_start_date: '2026-08-01',
+        event_end_date: '2026-08-31',
+      })
+      expect(
+        sqlite.prepare('select count(*) as count from share_calendars').get(),
+      ).toEqual({ count: 1 })
+      expect(
+        sqlite.prepare('select count(*) as count from visitor_sessions').get(),
+      ).toEqual({ count: 1 })
+      expect(sqlite.pragma('foreign_key_check')).toEqual([])
+      expect(sqlite.pragma('foreign_keys', { simple: true })).toBe(1)
+    } finally {
+      sqlite.close()
+    }
   })
 
   it('enables foreign keys and enforces parent relationships', () => {
@@ -234,4 +319,16 @@ function seedCalendar(database: AppDatabase): void {
       ) values ('calendar-1', 1, 'google-calendar-1', '기본 캘린더')
     `)
     .run()
+}
+
+function applySqlMigration(
+  sqlite: BetterSqlite3.Database,
+  filename: string,
+): void {
+  const sql = readFileSync(resolve(process.cwd(), 'drizzle', filename), 'utf8')
+  for (const statement of sql.split('--> statement-breakpoint')) {
+    if (statement.trim()) {
+      sqlite.exec(statement)
+    }
+  }
 }

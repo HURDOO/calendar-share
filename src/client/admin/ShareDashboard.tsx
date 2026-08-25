@@ -19,8 +19,10 @@ interface ShareView {
   readonly name: string
   readonly calendarScope: 'ALL' | 'SELECTED'
   readonly calendarIds: string[]
-  readonly eventStartDate: string
-  readonly eventEndDate: string
+  readonly eventDateScope: 'ALL' | 'SELECTED'
+  readonly eventStartDate: string | null
+  readonly eventEndDate: string | null
+  readonly shareUrl: string | null
   readonly accessStartsAt: string | null
   readonly accessEndsAt: string | null
   readonly revokedAt: string | null
@@ -32,6 +34,7 @@ interface ShareFormValue {
   readonly name: string
   readonly calendarScope: 'ALL' | 'SELECTED'
   readonly calendarIds: string[]
+  readonly eventDateScope: 'ALL' | 'SELECTED'
   readonly eventStartDate: string
   readonly eventEndDate: string
   readonly limitAccess: boolean
@@ -49,8 +52,9 @@ interface PreviewResponse {
   readonly share: {
     readonly id: string
     readonly name: string
-    readonly eventStartDate: string
-    readonly eventEndDate: string
+    readonly eventDateScope: 'ALL' | 'SELECTED'
+    readonly eventStartDate: string | null
+    readonly eventEndDate: string | null
   } | null
   readonly events: PublicEvent[]
 }
@@ -61,12 +65,6 @@ type PreviewState =
   | { readonly status: 'error' }
   | { readonly status: 'ready'; readonly value: PreviewResponse }
 
-interface LinkNotice {
-  readonly shareId: string
-  readonly shareName: string
-  readonly shareUrl: string
-}
-
 export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
   const [calendars, setCalendars] = useState<CalendarView[]>([])
   const [shares, setShares] = useState<ShareView[]>([])
@@ -74,7 +72,6 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [editing, setEditing] = useState<ShareView | 'new' | null>(null)
-  const [linkNotice, setLinkNotice] = useState<LinkNotice | null>(null)
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' })
 
   useEffect(() => {
@@ -149,18 +146,8 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
         setMessage('공유를 저장하지 못했습니다. 입력값을 확인해 주세요.')
         return
       }
-      const body = (await response.json()) as {
-        share: ShareView
-        shareUrl?: string
-      }
+      const body = (await response.json()) as { share: ShareView }
       setShares((current) => upsertShare(current, body.share))
-      if (body.shareUrl) {
-        setLinkNotice({
-          shareId: body.share.id,
-          shareName: body.share.name,
-          shareUrl: body.shareUrl,
-        })
-      }
       setEditing(null)
       setMessage(isNew ? '공유를 만들었습니다.' : '공유를 수정했습니다.')
     } catch {
@@ -211,12 +198,8 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
         setMessage('새 링크를 발급하지 못했습니다.')
         return
       }
-      const body = (await response.json()) as { shareUrl: string }
-      setLinkNotice({
-        shareId: share.id,
-        shareName: share.name,
-        shareUrl: body.shareUrl,
-      })
+      const body = (await response.json()) as { share: ShareView }
+      setShares((current) => upsertShare(current, body.share))
       setMessage('새 링크를 발급했습니다. 이전 링크는 더 이상 사용할 수 없습니다.')
     } catch {
       setMessage('새 링크를 발급하지 못했습니다.')
@@ -247,7 +230,6 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
           item.id === share.id ? { ...item, revokedAt, updatedAt: revokedAt } : item,
         ),
       )
-      setLinkNotice((current) => (current?.shareId === share.id ? null : current))
       setPreview({ status: 'idle' })
       setMessage('공유를 종료했습니다.')
     } catch {
@@ -257,8 +239,12 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
     }
   }
 
-  async function copyLink(notice: LinkNotice) {
-    const copied = await copyText(notice.shareUrl)
+  async function copyLink(share: ShareView) {
+    if (!share.shareUrl) {
+      setMessage('공유 주소를 다시 표시하려면 새 링크를 발급해 주세요.')
+      return
+    }
+    const copied = await copyText(share.shareUrl)
     setMessage(
       copied
         ? '공유 링크를 복사했습니다.'
@@ -289,27 +275,6 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
         </p>
       ) : null}
 
-      {linkNotice ? (
-        <section className="link-notice" aria-labelledby="new-link-title">
-          <div>
-            <p className="panel-kicker">지금 한 번만 표시됩니다</p>
-            <h3 id="new-link-title">{linkNotice.shareName} 링크</h3>
-            <p>나중에는 원문 링크를 다시 볼 수 없으며 새 링크를 발급해야 합니다.</p>
-          </div>
-          <label htmlFor="new-share-link">공유 주소</label>
-          <div className="copy-row">
-            <input id="new-share-link" readOnly value={linkNotice.shareUrl} />
-            <button
-              className="primary-button"
-              onClick={() => void copyLink(linkNotice)}
-              type="button"
-            >
-              링크 복사
-            </button>
-          </div>
-        </section>
-      ) : null}
-
       {editing ? (
         <ShareForm
           calendars={calendars}
@@ -331,8 +296,6 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
       ) : (
         <ul className="share-list">
           {shares.map((share) => {
-            const currentLink =
-              linkNotice?.shareId === share.id ? linkNotice : null
             return (
               <li className="share-card" key={share.id}>
                 <div className="share-card__heading">
@@ -353,15 +316,38 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
                 <dl className="share-summary">
                   <div>
                     <dt>일정 범위</dt>
-                    <dd>
-                      {share.eventStartDate} – {share.eventEndDate}
-                    </dd>
+                    <dd>{formatEventDateRange(share)}</dd>
                   </div>
                   <div>
                     <dt>접근 시간</dt>
                     <dd>{formatAccessRange(share)}</dd>
                   </div>
                 </dl>
+                {!share.revokedAt ? (
+                  share.shareUrl ? (
+                    <div className="copy-row share-card__link">
+                      <label className="sr-only" htmlFor={`share-link-${share.id}`}>
+                        {share.name} 공유 주소
+                      </label>
+                      <input
+                        id={`share-link-${share.id}`}
+                        readOnly
+                        value={share.shareUrl}
+                      />
+                      <button
+                        className="secondary-button"
+                        onClick={() => void copyLink(share)}
+                        type="button"
+                      >
+                        링크 복사
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="share-link-unavailable">
+                      기존 주소를 다시 표시하려면 새 링크를 발급해 주세요.
+                    </p>
+                  )
+                ) : null}
                 <div className="share-actions">
                   <button
                     className="secondary-button"
@@ -380,15 +366,7 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
                       >
                         수정
                       </button>
-                      {currentLink ? (
-                        <button
-                          className="secondary-button"
-                          onClick={() => void copyLink(currentLink)}
-                          type="button"
-                        >
-                          링크 복사
-                        </button>
-                      ) : (
+                      {!share.shareUrl ? (
                         <button
                           className="secondary-button"
                           disabled={busy}
@@ -397,7 +375,7 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
                         >
                           새 링크 발급
                         </button>
-                      )}
+                      ) : null}
                       <button
                         className="danger-button"
                         disabled={busy}
@@ -546,31 +524,58 @@ function ShareForm({
         ) : null}
       </fieldset>
 
-      <fieldset className="form-field date-fields">
+      <fieldset className="form-field">
         <legend>공개할 일정 날짜</legend>
-        <label>
-          시작일
+        <label className="choice-row">
           <input
-            onChange={(event) =>
-              setValue({ ...value, eventStartDate: event.target.value })
-            }
-            required
-            type="date"
-            value={value.eventStartDate}
+            checked={value.eventDateScope === 'ALL'}
+            name="event-date-scope"
+            onChange={() => setValue({ ...value, eventDateScope: 'ALL' })}
+            type="radio"
           />
+          <span>
+            <strong>전체 데이터</strong>
+            <small>현재 동기화된 과거 3개월부터 미래 3개월까지 공개합니다.</small>
+          </span>
         </label>
-        <label>
-          종료일
+        <label className="choice-row">
           <input
-            min={value.eventStartDate}
-            onChange={(event) =>
-              setValue({ ...value, eventEndDate: event.target.value })
-            }
-            required
-            type="date"
-            value={value.eventEndDate}
+            checked={value.eventDateScope === 'SELECTED'}
+            name="event-date-scope"
+            onChange={() => setValue({ ...value, eventDateScope: 'SELECTED' })}
+            type="radio"
           />
+          <span>
+            <strong>선택한 기간</strong>
+          </span>
         </label>
+        {value.eventDateScope === 'SELECTED' ? (
+          <div className="date-fields">
+            <label>
+              시작일
+              <input
+                onChange={(event) =>
+                  setValue({ ...value, eventStartDate: event.target.value })
+                }
+                required
+                type="date"
+                value={value.eventStartDate}
+              />
+            </label>
+            <label>
+              종료일
+              <input
+                min={value.eventStartDate}
+                onChange={(event) =>
+                  setValue({ ...value, eventEndDate: event.target.value })
+                }
+                required
+                type="date"
+                value={value.eventEndDate}
+              />
+            </label>
+          </div>
+        ) : null}
       </fieldset>
 
       <fieldset className="form-field">
@@ -688,8 +693,9 @@ function formValue(share: ShareView | null): ShareFormValue {
       name: share.name,
       calendarScope: share.calendarScope,
       calendarIds: share.calendarIds,
-      eventStartDate: share.eventStartDate,
-      eventEndDate: share.eventEndDate,
+      eventDateScope: share.eventDateScope,
+      eventStartDate: share.eventStartDate ?? todayInSeoul(),
+      eventEndDate: share.eventEndDate ?? addMonths(todayInSeoul(), 1),
       limitAccess: Boolean(share.accessStartsAt && share.accessEndsAt),
       accessStartsAt: toLocalInput(share.accessStartsAt),
       accessEndsAt: toLocalInput(share.accessEndsAt),
@@ -700,6 +706,7 @@ function formValue(share: ShareView | null): ShareFormValue {
     name: '',
     calendarScope: 'ALL',
     calendarIds: [],
+    eventDateScope: 'SELECTED',
     eventStartDate: today,
     eventEndDate: addMonths(today, 1),
     limitAccess: false,
@@ -712,7 +719,10 @@ function validateForm(value: ShareFormValue): string | null {
   if (!value.name.trim()) {
     return '공유 이름을 입력해 주세요.'
   }
-  if (!value.eventStartDate || value.eventEndDate < value.eventStartDate) {
+  if (
+    value.eventDateScope === 'SELECTED' &&
+    (!value.eventStartDate || value.eventEndDate < value.eventStartDate)
+  ) {
     return '일정 날짜 범위를 확인해 주세요.'
   }
   if (
@@ -736,8 +746,9 @@ function toSharePayload(value: ShareFormValue) {
       : null,
     calendarIds: value.calendarScope === 'ALL' ? [] : value.calendarIds,
     calendarScope: value.calendarScope,
-    eventEndDate: value.eventEndDate,
-    eventStartDate: value.eventStartDate,
+    eventDateScope: value.eventDateScope,
+    eventEndDate: value.eventDateScope === 'ALL' ? null : value.eventEndDate,
+    eventStartDate: value.eventDateScope === 'ALL' ? null : value.eventStartDate,
     name: value.name.trim(),
   }
 }
@@ -756,6 +767,12 @@ function formatAccessRange(share: ShareView): string {
   return `${formatShortDateTime(share.accessStartsAt)} – ${formatShortDateTime(
     share.accessEndsAt,
   )}`
+}
+
+function formatEventDateRange(share: ShareView): string {
+  return share.eventDateScope === 'ALL'
+    ? '전체 데이터 (동기화된 ±3개월)'
+    : `${share.eventStartDate ?? ''} – ${share.eventEndDate ?? ''}`
 }
 
 function formatShortDateTime(value: string): string {

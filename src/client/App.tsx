@@ -1,10 +1,16 @@
+import { useEffect, useState } from 'react'
+
 import { AdminApp } from './admin/AdminApp'
 import {
   PublicCalendarApp,
   PublicUnavailablePage,
 } from './public/PublicCalendarApp'
 
-export function App() {
+export function App({ initialShareToken = null }: { initialShareToken?: string | null }) {
+  if (initialShareToken !== null) {
+    return <ShareTokenExchange token={initialShareToken} />
+  }
+
   if (window.location.pathname.startsWith('/admin')) {
     return <AdminApp />
   }
@@ -37,6 +43,54 @@ export function App() {
           </div>
         </dl>
       </section>
+    </main>
+  )
+}
+
+function ShareTokenExchange({ token }: { readonly token: string }) {
+  const [shareId, setShareId] = useState<string | null>(null)
+  const [unavailable, setUnavailable] = useState(!/^[A-Za-z0-9_-]{43}$/.test(token))
+
+  useEffect(() => {
+    if (unavailable) {
+      window.history.replaceState(null, '', '/share/unavailable')
+      return
+    }
+    const controller = new AbortController()
+    void fetch('/api/v1/public/session', {
+      body: JSON.stringify({ token }),
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('share-token-exchange-failed')
+        }
+        const body = (await response.json()) as { shareId: string }
+        window.history.replaceState(null, '', `/share/${body.shareId}`)
+        setShareId(body.shareId)
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+        window.history.replaceState(null, '', '/share/unavailable')
+        setUnavailable(true)
+      })
+    return () => controller.abort()
+  }, [token, unavailable])
+
+  if (unavailable) {
+    return <PublicUnavailablePage />
+  }
+  if (shareId) {
+    return <PublicCalendarApp expectedShareId={shareId} />
+  }
+  return (
+    <main className="visitor-shell visitor-state">
+      <p role="status">공유 링크를 확인하고 있습니다.</p>
     </main>
   )
 }

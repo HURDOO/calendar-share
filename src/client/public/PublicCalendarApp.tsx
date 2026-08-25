@@ -23,8 +23,9 @@ export interface PublicCalendarData {
   readonly share: {
     readonly id: string
     readonly name: string
-    readonly eventStartDate: string
-    readonly eventEndDate: string
+    readonly eventDateScope: 'ALL' | 'SELECTED'
+    readonly eventStartDate: string | null
+    readonly eventEndDate: string | null
   }
   readonly events: PublicEvent[]
 }
@@ -162,7 +163,12 @@ export function PublicCalendarView({
           <span className="eyebrow">Shared calendar</span>
           <h1>{data.share.name}</h1>
           <p>
-            {formatDateRange(data.share.eventStartDate, data.share.eventEndDate)}
+            {data.share.eventDateScope === 'ALL'
+              ? '전체 데이터'
+              : formatDateRange(
+                  data.share.eventStartDate ?? '',
+                  data.share.eventEndDate ?? '',
+                )}
           </p>
         </div>
         {showStreamStatus ? (
@@ -263,8 +269,9 @@ function EventCard({ event }: { readonly event: PublicEvent }) {
 }
 
 function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
-  const startMonth = data.share.eventStartDate.slice(0, 7)
-  const endMonth = data.share.eventEndDate.slice(0, 7)
+  const [startDate, endDate] = calendarBounds(data)
+  const startMonth = startDate.slice(0, 7)
+  const endMonth = endDate.slice(0, 7)
   const todayMonth = formatLocalDate(new Date().toISOString()).slice(0, 7)
   const initialMonth = clamp(todayMonth, startMonth, endMonth)
   const [month, setMonth] = useState(initialMonth)
@@ -304,8 +311,7 @@ function MonthCalendar({ data }: { readonly data: PublicCalendarData }) {
             return <div className="calendar-day calendar-day--blank" key={`blank-${index}`} />
           }
           const events = eventsForDate(data.events, date)
-          const inRange =
-            date >= data.share.eventStartDate && date <= data.share.eventEndDate
+          const inRange = date >= startDate && date <= endDate
           return (
             <section
               aria-label={formatDateHeading(date)}
@@ -339,12 +345,34 @@ function groupEvents(data: PublicCalendarData): Array<[string, PublicEvent[]]> {
   const grouped = new Map<string, PublicEvent[]>()
   for (const event of data.events) {
     const rawDate = eventDisplayDate(event)
-    const date = rawDate < data.share.eventStartDate ? data.share.eventStartDate : rawDate
+    const date =
+      data.share.eventDateScope === 'SELECTED' &&
+      data.share.eventStartDate &&
+      rawDate < data.share.eventStartDate
+        ? data.share.eventStartDate
+        : rawDate
     const existing = grouped.get(date) ?? []
     existing.push(event)
     grouped.set(date, existing)
   }
   return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right))
+}
+
+function calendarBounds(data: PublicCalendarData): [string, string] {
+  if (
+    data.share.eventDateScope === 'SELECTED' &&
+    data.share.eventStartDate &&
+    data.share.eventEndDate
+  ) {
+    return [data.share.eventStartDate, data.share.eventEndDate]
+  }
+
+  const dates = data.events
+    .map(eventDisplayDate)
+    .filter((date) => date !== '9999-12-31')
+    .sort()
+  const today = formatLocalDate(new Date().toISOString())
+  return [dates[0] ?? today, dates.at(-1) ?? today]
 }
 
 function eventsForDate(events: PublicEvent[], date: string): PublicEvent[] {

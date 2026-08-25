@@ -17,12 +17,25 @@ export const shareWriteSchema = z
     accessStartsAt: optionalInstantSchema,
     calendarIds: z.array(z.string().uuid()).max(1000),
     calendarScope: z.enum(['ALL', 'SELECTED']),
-    eventEndDate: calendarDateSchema,
-    eventStartDate: calendarDateSchema,
+    eventDateScope: z.enum(['ALL', 'SELECTED']).default('SELECTED'),
+    eventEndDate: calendarDateSchema.nullable(),
+    eventStartDate: calendarDateSchema.nullable(),
     name: z.string().trim().min(1).max(120),
   })
   .superRefine((value, context) => {
-    if (value.eventEndDate < value.eventStartDate) {
+    if (value.eventDateScope === 'ALL') {
+      if (value.eventStartDate !== null || value.eventEndDate !== null) {
+        context.addIssue({
+          code: 'custom',
+          message: 'ALL event date scope cannot have boundaries',
+          path: ['eventStartDate'],
+        })
+      }
+    } else if (
+      !value.eventStartDate ||
+      !value.eventEndDate ||
+      value.eventEndDate < value.eventStartDate
+    ) {
       context.addIssue({
         code: 'custom',
         message: 'Event date range is invalid',
@@ -69,15 +82,17 @@ export const shareWriteSchema = z
 
 export const shareIdParamsSchema = z.object({ id: z.string().uuid() })
 
-export type ShareWriteInput = z.infer<typeof shareWriteSchema>
+export type ShareWriteInput = z.input<typeof shareWriteSchema>
 
 export interface ShareView {
   readonly id: string
   readonly name: string
   readonly calendarScope: 'ALL' | 'SELECTED'
   readonly calendarIds: string[]
-  readonly eventStartDate: string
-  readonly eventEndDate: string
+  readonly eventDateScope: 'ALL' | 'SELECTED'
+  readonly eventStartDate: string | null
+  readonly eventEndDate: string | null
+  readonly shareUrl: string | null
   readonly accessStartsAt: string | null
   readonly accessEndsAt: string | null
   readonly revokedAt: string | null

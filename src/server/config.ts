@@ -8,6 +8,7 @@ export const REQUIRED_SECRET_NAMES = [
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
   'GOOGLE_TOKEN_ENCRYPTION_KEY',
+  'SHARE_LINK_SECRET',
 ] as const
 
 const environmentSchema = z.object({

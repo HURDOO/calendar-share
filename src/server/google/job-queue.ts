@@ -18,6 +18,17 @@ export interface ClaimedSyncJob {
   readonly payload: Record<string, unknown>
 }
 
+export interface SyncJobStatus {
+  readonly id: string
+  readonly kind: SyncJobKind
+  readonly status: 'PENDING' | 'RUNNING' | 'RETRY' | 'SUCCEEDED' | 'FAILED'
+  readonly attemptCount: number
+  readonly maxAttempts: number
+  readonly nextAttemptAt: string
+  readonly finishedAt: string | null
+  readonly lastErrorCategory: string | null
+}
+
 export class SyncJobQueue {
   constructor(
     private readonly database: AppDatabase,
@@ -31,27 +42,88 @@ export class SyncJobQueue {
     calendarId: string | null = null,
     payload: Record<string, unknown> = {},
   ): boolean {
+    return this.enqueueTracked(kind, dedupeKey, calendarId, payload).enqueued
+  }
+
+  enqueueTracked(
+    kind: SyncJobKind,
+    dedupeKey: string,
+    calendarId: string | null = null,
+    payload: Record<string, unknown> = {},
+  ): { readonly id: string; readonly enqueued: boolean } {
     const now = this.now().getTime()
-    const result = this.database.sqlite
-      .prepare(`
+    const id = randomUUID()
+    const insert = this.database.sqlite.transaction(() => {
+      const result = this.database.sqlite
+        .prepare(`
         insert into sync_jobs (
           id, connection_id, calendar_id, kind, dedupe_key, status,
           payload_json, next_attempt_at, created_at, updated_at
         ) values (?, 1, ?, ?, ?, 'PENDING', ?, ?, ?, ?)
         on conflict do nothing
       `)
-      .run(
-        randomUUID(),
-        calendarId,
-        kind,
-        dedupeKey,
-        JSON.stringify(payload),
-        now,
-        now,
-        now,
-      )
+        .run(
+          id,
+          calendarId,
+          kind,
+          dedupeKey,
+          JSON.stringify(payload),
+          now,
+          now,
+          now,
+        )
 
-    return result.changes === 1
+      if (result.changes === 1) {
+        return { id, enqueued: true } as const
+      }
+
+      const active = this.database.sqlite
+        .prepare(
+          `select id from sync_jobs
+           where dedupe_key = ? and status in ('PENDING', 'RUNNING', 'RETRY')`,
+        )
+        .get(dedupeKey) as { id: string } | undefined
+      if (!active) {
+        throw new Error('SYNC_JOB_DEDUPE_CONFLICT_MISSING')
+      }
+      return { id: active.id, enqueued: false } as const
+    })
+
+    return insert()
+  }
+
+  status(jobId: string): SyncJobStatus | null {
+    const row = this.database.sqlite
+      .prepare(`
+        select id, kind, status, attempt_count, max_attempts, next_attempt_at,
+               finished_at, last_error_category
+        from sync_jobs where id = ?
+      `)
+      .get(jobId) as
+      | {
+          id: string
+          kind: SyncJobKind
+          status: SyncJobStatus['status']
+          attempt_count: number
+          max_attempts: number
+          next_attempt_at: number
+          finished_at: number | null
+          last_error_category: string | null
+        }
+      | undefined
+    return row
+      ? {
+          id: row.id,
+          kind: row.kind,
+          status: row.status,
+          attemptCount: row.attempt_count,
+          maxAttempts: row.max_attempts,
+          nextAttemptAt: new Date(row.next_attempt_at).toISOString(),
+          finishedAt:
+            row.finished_at === null ? null : new Date(row.finished_at).toISOString(),
+          lastErrorCategory: row.last_error_category,
+        }
+      : null
   }
 
   claimNext(): ClaimedSyncJob | null {

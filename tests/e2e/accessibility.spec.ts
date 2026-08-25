@@ -113,6 +113,7 @@ function publicData() {
     share: {
       id: shareId,
       name: '접근성 공유',
+      eventDateScope: 'SELECTED',
       eventStartDate: '2026-08-01',
       eventEndDate: '2026-09-30',
     },

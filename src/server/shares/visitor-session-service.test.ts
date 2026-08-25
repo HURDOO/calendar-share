@@ -24,6 +24,7 @@ describe('VisitorSessionService', () => {
     const shares = new ShareService(
       database,
       'https://calendar.app.hurdoo.kr',
+      Buffer.alloc(32, 15).toString('base64url'),
       () => now,
     )
     const visitors = new VisitorSessionService(database, policy, () => now)

@@ -12,12 +12,22 @@ describe('SyncJobQueue', () => {
     const queue = new SyncJobQueue(database)
 
     try {
-      expect(queue.enqueue('CALENDAR_LIST_SYNC', 'calendar-list')).toBe(true)
-      expect(queue.enqueue('CALENDAR_LIST_SYNC', 'calendar-list')).toBe(false)
+      const first = queue.enqueueTracked('CALENDAR_LIST_SYNC', 'calendar-list')
+      const duplicate = queue.enqueueTracked('CALENDAR_LIST_SYNC', 'calendar-list')
+      expect(first.enqueued).toBe(true)
+      expect(duplicate).toEqual({ id: first.id, enqueued: false })
+      expect(queue.status(first.id)).toMatchObject({
+        id: first.id,
+        status: 'PENDING',
+      })
 
       const job = queue.claimNext()
       expect(job?.kind).toBe('CALENDAR_LIST_SYNC')
       queue.succeed(job?.id ?? '')
+      expect(queue.status(first.id)).toMatchObject({
+        finishedAt: expect.any(String),
+        status: 'SUCCEEDED',
+      })
 
       expect(queue.enqueue('CALENDAR_LIST_SYNC', 'calendar-list')).toBe(true)
     } finally {

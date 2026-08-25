@@ -29,6 +29,7 @@ test('renders a touch-safe calendar without modern streaming APIs', async ({
         share: {
           id: shareId,
           name: '인앱 브라우저 공유',
+          eventDateScope: 'SELECTED',
           eventStartDate: '2026-08-01',
           eventEndDate: '2026-08-31',
         },
