@@ -1,5 +1,6 @@
 import { stderr, stdout } from 'node:process'
 
+import { validateAdminPassword } from '../src/shared/admin-password-policy'
 import { hashPassword } from '../src/shared/secrets'
 import { readHiddenLine } from './read-hidden-line'
 
@@ -11,12 +12,9 @@ async function main() {
   const password = await readHiddenLine('Admin password: ')
   const confirmation = await readHiddenLine('Confirm password: ')
 
-  if (Array.from(password).length < 12) {
-    throw new Error('Admin password must contain at least 12 characters')
-  }
-
-  if (password !== confirmation) {
-    throw new Error('Passwords do not match')
+  const validationError = validateAdminPassword(password, confirmation)
+  if (validationError) {
+    throw new Error(validationError)
   }
 
   const verifier = await hashPassword(password)

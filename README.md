@@ -74,7 +74,7 @@ pnpm admin:hash-password
 pnpm secret:generate
 ```
 
-`admin:hash-password`는 TTY 숨김 입력으로 12자 이상의 비밀번호를 두 번 받고 scrypt verifier를 출력합니다. `secret:generate`는 `SESSION_SECRET`과 `GOOGLE_TOKEN_ENCRYPTION_KEY`에 사용할 256비트 값을 한 번에 하나씩 출력합니다.
+`admin:hash-password`는 TTY 숨김 입력으로 8자 이상의 비밀번호를 두 번 받고 scrypt verifier를 출력합니다. `secret:generate`는 `SESSION_SECRET`과 `GOOGLE_TOKEN_ENCRYPTION_KEY`에 사용할 256비트 값을 한 번에 하나씩 출력합니다.
 
 ## 관리자 인증 보안 계약
 

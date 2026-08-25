@@ -32,6 +32,7 @@
 - 산출물: 인증 API와 middleware, 로그인/로그아웃 UI, 보안 테스트.
 - 완료 조건: 정상·오류·만료·폐기·CSRF·반복 실패 테스트가 통과하고 쿠키 속성과 로그 redaction이 검증된다.
 - 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(30개), `pnpm build`, `pnpm test:e2e` 통과. 정상·오류 로그인, 정확한 Origin, IP별 반복 실패, HttpOnly/Secure/SameSite 쿠키, DB token hash, 30분 유휴·8시간 절대 만료, logout 폐기, session-bound CSRF와 로그 redaction을 검증했다.
+- 후속 변경: 2026-08-25 사용자 결정으로 관리자 비밀번호 생성 CLI의 최소 길이를 Unicode 문자 기준 8자로 변경했다. `pnpm lint`, `pnpm typecheck`, `pnpm test`(89개), `pnpm build`가 통과했고 정확히 8자 허용·7자 거부·확인 불일치를 자동 검증했다.
 
 ## [x] T-005 Google OAuth와 동기화 수직 흐름 구현
 
