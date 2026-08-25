@@ -954,16 +954,15 @@ button.calendar-day:enabled:hover {
 }
 
 .week-timetable-scroll {
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
+  overflow-x: hidden;
   border-top: 1px solid #e1edf4;
-  scrollbar-color: #a9c8da #eef5f9;
 }
 
 .week-timetable {
   display: grid;
-  min-width: 900px;
-  grid-template-columns: 60px repeat(7, minmax(116px, 1fr));
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 60px repeat(7, minmax(0, 1fr));
 }
 
 .week-time-corner,
@@ -1261,7 +1260,64 @@ button.calendar-day:enabled:hover {
   }
 
   .week-timetable {
-    min-width: 850px;
-    grid-template-columns: 54px repeat(7, 112px);
+    min-width: 0;
+    grid-template-columns: 42px repeat(7, minmax(0, 1fr));
+  }
+
+  .week-time-corner,
+  .week-day-header {
+    min-height: 54px;
+  }
+
+  .week-time-corner,
+  .week-all-day-label {
+    padding: 2px;
+    font-size: 0.52rem;
+  }
+
+  .week-day-header {
+    gap: 2px;
+  }
+
+  .week-day-header span {
+    font-size: 0.6rem;
+  }
+
+  .week-day-header strong {
+    font-size: 0.82rem;
+  }
+
+  .week-all-day-cell {
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .week-all-day-event {
+    padding: 3px 2px;
+    border-left-width: 2px;
+    font-size: 0.54rem;
+  }
+
+  .week-time-axis span {
+    right: 3px;
+    font-size: 0.52rem;
+  }
+
+  .week-timed-event {
+    padding: 3px 2px;
+    border-left-width: 2px;
+  }
+
+  .week-timed-event strong {
+    display: -webkit-box;
+    font-size: 0.56rem;
+    line-height: 1.1;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .week-timed-event span {
+    display: none;
   }
 }

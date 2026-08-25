@@ -98,6 +98,14 @@
 - 완료 조건: 모든 화면에서 월–일과 00:00–24:00 축이 보이고 일정이 실제 시간 위치에 놓인다. 월간 일정 이름이 표시되고 날짜 선택 시 해당 주간이 열린다.
 - 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. 월–일 순서, 18:00 일정의 분 단위 위치, 24:00 경계, 멀티데이 종일 행, 월간 일정명·날짜 전환, 모바일 가로 스크롤, Chromium/WebKit 접근성·키보드 흐름을 검증했다.
 
+## [x] T-009D 모바일 주간 7일 폭 맞춤
+
+- 범위: 모바일 주간 시간표의 가로 스크롤을 제거하고 월–일 7개 열을 화면 폭에 맞춘다.
+- 선행 조건: T-009C와 사용자 모바일 주간 피드백.
+- 산출물: 유동 7열 CSS, 모바일 일정 제목 축약, 320px·390px 가로 오버플로 브라우저 회귀 테스트.
+- 완료 조건: 최소 320px부터 주간 시간표의 7일이 모두 한 화면에 보이고 `scrollWidth`가 표시 영역을 넘지 않는다.
+- 검증: 2026-08-25 `pnpm lint`, `pnpm typecheck`, `pnpm test`(103개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e` 통과. Chromium/WebKit의 320px·390px에서 요일 7개, 마지막 일요일 경계와 무가로스크롤을 검증하고 320px 실화면 캡처로 일정 제목 가독성을 확인했다.
+
 ## [>] T-010 관측성, 백업과 운영 준비
 
 - 범위: 구조화 로그, health/readiness, sync 상태, SQLite 일관 백업/복원, graceful shutdown, ARM64 native module smoke test를 구현한다.

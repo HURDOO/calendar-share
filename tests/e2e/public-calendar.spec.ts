@@ -54,6 +54,9 @@ test('opens a token link as a clean mobile calendar and refreshes on SSE', async
   await page.getByRole('button', { name: '주간', exact: true }).click()
   await expect(page.locator('.week-timetable-scroll')).toBeVisible()
   await expect(page.locator('.week-timed-event').getByText('모바일 첫 일정')).toBeVisible()
+  await expectFullWeekToFit(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await expectFullWeekToFit(page)
   await page.getByRole('button', { name: '월간' }).click()
   await expect(page.locator('.visitor-month')).toBeVisible()
   await expect(page.getByRole('heading', { name: '2026년 8월' })).toBeVisible()
@@ -111,6 +114,24 @@ test('shows the monthly calendar on a wide screen', async ({ page }) => {
   await expect(page.locator('.visitor-list').getByText('데스크톱 일정')).toBeVisible()
   await expect(page.getByRole('link', { name: /관리자/ })).toHaveCount(0)
 })
+
+async function expectFullWeekToFit(page: Page): Promise<void> {
+  const metrics = await page.locator('.week-timetable-scroll').evaluate((scroll) => {
+    const headers = [...scroll.querySelectorAll('.week-day-header')]
+    const scrollBounds = scroll.getBoundingClientRect()
+    const lastHeaderBounds = headers.at(-1)?.getBoundingClientRect()
+    return {
+      clientWidth: scroll.clientWidth,
+      headerCount: headers.length,
+      lastHeaderRight: lastHeaderBounds?.right ?? Number.POSITIVE_INFINITY,
+      scrollRight: scrollBounds.right,
+      scrollWidth: scroll.scrollWidth,
+    }
+  })
+  expect(metrics.headerCount).toBe(7)
+  expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1)
+  expect(metrics.lastHeaderRight).toBeLessThanOrEqual(metrics.scrollRight + 1)
+}
 
 async function installMockEventSource(page: Page): Promise<void> {
   await page.addInitScript(() => {
