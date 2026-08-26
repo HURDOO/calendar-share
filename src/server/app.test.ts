@@ -1,9 +1,15 @@
+import { fileURLToPath } from 'node:url'
+
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { encodeSecretMaterial, hashPassword } from '../shared/secrets'
 import { buildServer } from './app'
 import { createTestDatabase } from './db/testing'
 import { CONTENT_SECURITY_POLICY } from './security/response-policy'
+
+const STATIC_FIXTURE_DIR = fileURLToPath(
+  new URL('../../tests/fixtures/static', import.meta.url),
+)
 
 describe('server foundation', () => {
   const apps: Awaited<ReturnType<typeof buildServer>>[] = []
@@ -21,7 +27,11 @@ describe('server foundation', () => {
   })
 
   async function createApp(
-    options: { readonly secureCookies?: boolean; readonly trustProxy?: string } = {},
+    options: {
+      readonly publicDir?: string
+      readonly secureCookies?: boolean
+      readonly trustProxy?: string
+    } = {},
   ) {
     const app = await buildServer({
       adminAuth: {
@@ -150,6 +160,23 @@ describe('server foundation', () => {
       'public, max-age=31536000, immutable',
     )
     expect(dynamic.headers['cache-control']).toBe('no-store')
+  })
+
+  it('applies the cache policy to files served by the static plugin', async () => {
+    const app = await createApp({ publicDir: STATIC_FIXTURE_DIR })
+
+    const html = await app.inject({ method: 'GET', url: '/' })
+    const asset = await app.inject({
+      method: 'GET',
+      url: '/assets/index-AbCd1234.js',
+    })
+
+    expect(html.statusCode).toBe(200)
+    expect(html.headers['cache-control']).toBe('no-store')
+    expect(asset.statusCode).toBe(200)
+    expect(asset.headers['cache-control']).toBe(
+      'public, max-age=31536000, immutable',
+    )
   })
 
   it('masks internal errors and oversized request bodies', async () => {

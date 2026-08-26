@@ -123,8 +123,8 @@ docker build --platform linux/arm64 --tag calendar-share:t010 .
 ## 7. T-011 사용자 제어 배포 체크리스트
 
 - [x] `@hurdoo/calendar-share` 저장소에 `@hurdooagent` collaborator 초대 및 push 방식 확인
-- [ ] GHCR package 경로와 ARM64 image digest 확인
-- [ ] deployd dashboard의 여섯 required secret이 모두 준비 상태인지 names-only API로 확인
+- [x] GHCR package 경로와 ARM64 image digest 확인
+- [x] deployd dashboard의 여섯 required secret이 모두 준비 상태인지 names-only API로 확인
 - [ ] `TRUST_PROXY`가 실제 바로 앞 proxy peer와 일치하는지 확인
 - [ ] 사용자 승인 뒤 배포하고 readiness/HSTS/CSP/cache header 확인
 - [ ] production OAuth callback과 Google 연결·동기화 확인

@@ -165,6 +165,7 @@ export async function buildServer(options: BuildServerOptions) {
 
   if (options.publicDir) {
     await app.register(fastifyStatic, {
+      cacheControl: false,
       root: options.publicDir,
       prefix: '/',
     })
