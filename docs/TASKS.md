@@ -136,5 +136,6 @@
 - 선행 조건: T-010, 공개 HTTPS origin, Google production 자격 증명, 배포 승인.
 - 산출물: 배포 가능한 이미지, secrets names-only readiness, 배포/롤백 검증 기록.
 - 완료 조건: 사용자 제어 배포 후 health, OAuth callback, Google webhook, 공유 링크 smoke test가 성공하고 검증된 롤백 지점이 있다.
-- 진행: 2026-08-26 사용자가 `@hurdoo` 저장소에 `@hurdooagent` collaborator로 push하는 방식과 public 배포 계획을 승인했다. deployd v0.7.1과 배포 plan은 정상이며 신규 앱·GHCR package가 아직 없어 수동 bootstrap workflow부터 진행한다.
+- 진행: 2026-08-26 사용자가 `@hurdoo` 저장소에 `@hurdooagent` collaborator로 push하는 방식과 public 배포 계획을 승인했다. GHCR package를 저장소에 연결하고 첫 immutable ARM64 image를 발행했으며, deployd v0.7.1에 public 앱·HTTPS route·names-only secret을 등록했다. 첫 release는 deployd가 image의 `USER node`를 capability 없는 UID 0으로 덮어쓰는 조건에서 node 소유 mode 0700/0600 Drizzle migration을 읽지 못해 중단됐다. runtime image에서 `/app/drizzle`에 `a+rX`만 추가하는 호환 수정과 새 release 검증을 진행한다.
 - 검증(배포 준비): 2026-08-26 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(112개), `pnpm build`, `pnpm security:bundle-check`, `pnpm test:e2e`가 통과했다. Chromium/WebKit 21개 통과와 Android WebView 전용 WebKit 1개 의도적 skip을 기록했으며, 날짜 경과로 공유 범위 밖에 밀리던 관리자 미리보기 E2E fixture는 브라우저 시계를 기준일로 고정해 안정화했다.
+- 검증(배포 권한 호환): 2026-08-26 `pnpm db:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`(112개), `pnpm build`, `pnpm security:bundle-check`가 통과했다. 수정 Linux ARM64 image를 deployd와 같은 UID `0:0`, effective capability `0`, read-only root, capability drop, `no-new-privileges`, writable `/data` bind 조건으로 실행해 Drizzle migration 적용, readiness 200 연속 3회와 Docker health `healthy`를 확인했다. `/app/drizzle`과 `meta`는 mode 0755, `_journal.json`은 0644로 확인했다.

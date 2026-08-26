@@ -103,6 +103,8 @@ live DB 교체는 데이터 변경 작업이다. 다음 순서를 생략하지 �
 
 `Dockerfile`은 Node.js 24.19.0 Bookworm slim digest와 pnpm 11.12.0을 고정한 multi-stage Linux ARM64 이미지다. `better-sqlite3`는 build stage에서 ARM64 native module로 컴파일된다. runtime은 `node` 사용자, read-only root filesystem, writable `/data`, `/tmp` tmpfs, 모든 capability drop, `no-new-privileges`를 전제로 한다.
 
+이미지는 기본적으로 `node` 사용자로 실행되지만 deployd managed runtime은 현재 UID `0:0`으로 덮어쓴 뒤 모든 capability를 제거한다. capability 없는 UID 0도 migration을 읽을 수 있도록 runtime의 `/app/drizzle` tree는 모든 사용자에게 읽기 권한과 디렉터리 탐색 권한만 제공해야 한다. Dockerfile의 `chmod -R a+rX /app/drizzle`을 제거하거나 migration을 mode 0600/0700으로 되돌리지 않는다.
+
 배포 전 다음을 통과시킨다.
 
 ```bash
