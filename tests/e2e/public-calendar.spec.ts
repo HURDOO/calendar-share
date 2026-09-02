@@ -4,6 +4,7 @@ const shareId = '40000000-0000-4000-8000-000000000001'
 const shareToken = 'A'.repeat(43)
 
 test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-08-25T00:00:00.000Z'))
   await installMockEventSource(page)
   await page.route('**/api/v1/public/session', async (route) => {
     expect(route.request().postDataJSON()).toEqual({ token: shareToken })
@@ -18,6 +19,52 @@ test.beforeEach(async ({ page }) => {
       status: 201,
     })
   })
+})
+
+test('keeps a 400-event mobile list bounded and opens details promptly', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.route('**/api/v1/public/events', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(largePublicData()),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+
+  await page.goto(`/#share=${shareToken}`)
+
+  const list = page.getByRole('region', { name: '날짜별 일정 목록' })
+  await expect(list.getByRole('article')).toHaveCount(80)
+  await expect(list.getByRole('heading', { level: 2 }).first()).toContainText(
+    '8월 25일',
+  )
+  await expect(list.getByText('121–200 / 400개 일정').first()).toBeVisible()
+  await expect(list.getByText('부하 일정 000')).toHaveCount(0)
+
+  await list.getByRole('button', { name: '다음 일정' }).first().click()
+  await expect(list.getByRole('article')).toHaveCount(80)
+  await expect(list.getByText('201–280 / 400개 일정').first()).toBeVisible()
+  await list.getByRole('button', { name: '오늘' }).first().click()
+  await expect(list.getByText('121–200 / 400개 일정').first()).toBeVisible()
+
+  await page.getByRole('button', { name: '주간', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: '2026년 8월 24일 – 8월 30일' }),
+  ).toBeVisible()
+  const detailOpenMs = await page
+    .getByRole('button', { name: '부하 일정 120 상세 보기' })
+    .evaluate(async (button) => {
+      const startedAt = performance.now()
+      ;(button as HTMLButtonElement).click()
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+      return performance.now() - startedAt
+    })
+  await expect(page.getByRole('dialog', { name: '부하 일정 120' })).toBeVisible()
+  expect(detailOpenMs).toBeLessThan(1_000)
 })
 
 test('opens a token link as a clean mobile calendar and refreshes on SSE', async ({
@@ -211,4 +258,42 @@ function publicData(title: string) {
       },
     ],
   }
+}
+
+function largePublicData() {
+  return {
+    availability: 'AVAILABLE',
+    share: {
+      id: shareId,
+      name: '대량 일정 공유',
+      eventDateScope: 'SELECTED',
+      eventStartDate: '2026-06-01',
+      eventEndDate: '2026-11-30',
+    },
+    events: Array.from({ length: 400 }, (_, index) => {
+      const startDate =
+        index < 120
+          ? addUtcDays('2026-06-01', index % 80)
+          : addUtcDays('2026-08-25', Math.floor((index - 120) / 4))
+      return {
+        id: `load-event-${index}`,
+        calendar: { id: 'calendar-load', name: '부하', color: '#4b9ad1' },
+        isAllDay: true,
+        startsAt: null,
+        endsAt: null,
+        startDate,
+        endDate: addUtcDays(startDate, 1),
+        title: `부하 일정 ${String(index).padStart(3, '0')}`,
+        location: null,
+        description: null,
+        isPrivate: false,
+      }
+    }),
+  }
+}
+
+function addUtcDays(date: string, amount: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`)
+  value.setUTCDate(value.getUTCDate() + amount)
+  return value.toISOString().slice(0, 10)
 }

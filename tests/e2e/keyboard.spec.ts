@@ -30,6 +30,7 @@ test('supports administrator login and share editing from the keyboard', async (
 test('switches views and moves between periods with the keyboard', async ({
   page,
 }) => {
+  await page.clock.setFixedTime(new Date('2026-08-25T00:00:00.000Z'))
   await page.addInitScript(() => {
     Object.defineProperty(window, 'EventSource', {
       configurable: true,

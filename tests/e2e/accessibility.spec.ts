@@ -25,6 +25,7 @@ test('has no detectable WCAG A or AA violations on public and login pages', asyn
 test('has no detectable WCAG A or AA violations in the public calendar', async ({
   page,
 }) => {
+  await page.clock.setFixedTime(new Date('2026-08-25T00:00:00.000Z'))
   await installEventSourceFallback(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.route('**/api/v1/public/events', async (route) => {

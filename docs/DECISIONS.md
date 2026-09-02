@@ -263,3 +263,11 @@
 - 결정: SIGTERM/SIGINT는 새 scheduler tick을 막고 실행 중 worker를 기다린 뒤 DB를 닫는다. 시작 시 남은 `RUNNING` job은 즉시 `RETRY`로 복구한다. 앱 ID와 origin은 `calendar`/`https://calendar.app.hurdoo.kr`를 유지하고 image repository는 `ghcr.io/hurdoo/calendar-share`를 사용한다. Node.js 24.19.0 기반 Linux ARM64 multi-stage 이미지는 비루트, read-only root, writable `/data`, `/tmp` tmpfs, capability drop과 `no-new-privileges`를 전제로 한다. T-010은 로컬 build/smoke까지만 하며 push와 배포는 T-011로 남긴다.
 - 고려한 대안: worker 강제 종료, stale lock 5분 대기, x86 emulation 이미지, root/writable runtime, 이미지 저장소도 `calendar`로 변경, T-010에서 즉시 push·배포.
 - 결과와 트레이드오프: queue 유실 없이 단일 프로세스를 정상 종료하고 프로젝트 repo 이름과 GHCR package를 일치시키면서 짧은 서비스 주소를 유지한다. 강제 종료 시 실행 중 API 호출은 완료되지 않을 수 있지만 durable job이 다음 시작에서 즉시 복구한다.
+
+## 2026-09-02: 대량 일정 목록을 오늘 기준 80개 단위로 표시
+
+- 상태: 승인
+- 맥락: 모바일에서 약 400개 일정을 한 번에 카드와 날짜 그룹으로 렌더링하면 초기 표시와 스크롤이 느려지고, 상세 대화상자 상태가 바뀔 때 주·월간이 전체 일정 배열을 날짜마다 다시 검색해 상세 열기도 지연됐다. 목록이 과거 3개월의 첫 일정부터 시작해 오늘 일정을 찾기도 불편했다.
+- 결정: 보기 버튼을 선택할 때마다 해당 보기의 기준일을 오늘(공유 범위 밖이면 가장 가까운 경계일)로 초기화한다. 목록은 오늘 이후 첫 occurrence부터 최대 80개만 렌더링하고 이전·오늘·다음 탐색을 제공한다. 일정 데이터가 바뀔 때 날짜별 인덱스와 occurrence 목록을 한 번 만들며, 주·월간은 memo 경계 안에서 이 인덱스를 재사용해 상세 대화상자 상태 변경과 분리한다.
+- 고려한 대안: 전체 목록 유지와 CSS 최적화만 적용, 무한 스크롤, 서버 API 페이지네이션, 상세를 별도 페이지로 이동.
+- 결과와 트레이드오프: 수백 개 일정에서도 DOM 크기와 반복 날짜 검색이 제한되고 오늘 일정에 바로 접근한다. 이전 일정은 한 번 더 눌러야 하며 공개 API 응답 자체는 공유 정책에 맞는 전체 데이터이므로 데이터 전송량은 줄지 않는다. 서버 페이지네이션은 SSE 재조회·여러 날 일정 계약을 함께 바꿔야 하므로 후속 측정에서 API 전송이 병목일 때 별도로 검토한다.

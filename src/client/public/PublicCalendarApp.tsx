@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export interface PublicEvent {
   readonly id: string
@@ -40,6 +40,12 @@ type StreamState = 'connecting' | 'live' | 'retrying' | 'unsupported'
 type CalendarViewMode = 'list' | 'week' | 'month'
 
 const viewModeStorageKey = 'calendar-share:view-mode'
+const listPageSize = 80
+
+interface EventOccurrence {
+  readonly date: string
+  readonly event: PublicEvent
+}
 
 export function PublicCalendarApp({ expectedShareId }: { expectedShareId: string }) {
   const [page, setPage] = useState<PageState>({ status: 'loading' })
@@ -161,9 +167,28 @@ export function PublicCalendarView({
 }) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>(initialViewMode)
   const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null)
-  const [startDate, endDate] = calendarBounds(data)
-  const [weekAnchorDate, setWeekAnchorDate] = useState(() =>
-    clamp(formatLocalDate(new Date().toISOString()), startDate, endDate),
+  const [viewResetKey, setViewResetKey] = useState(0)
+  const [startDate, endDate] = useMemo(() => calendarBounds(data), [data])
+  const today = clamp(
+    formatLocalDate(new Date().toISOString()),
+    startDate,
+    endDate,
+  )
+  const [weekAnchorDate, setWeekAnchorDate] = useState(today)
+  const groupedEvents = useMemo(
+    () => groupEvents(data, startDate, endDate),
+    [data, endDate, startDate],
+  )
+  const eventsByDate = useMemo(
+    () => new Map<string, PublicEvent[]>(groupedEvents),
+    [groupedEvents],
+  )
+  const occurrences = useMemo(
+    () =>
+      groupedEvents.flatMap(([date, events]) =>
+        events.map((event) => ({ date, event })),
+      ),
+    [groupedEvents],
   )
 
   useEffect(() => {
@@ -180,15 +205,19 @@ export function PublicCalendarView({
 
   const closeEventDetails = useCallback(() => setSelectedEvent(null), [])
 
-  function selectViewMode(mode: CalendarViewMode) {
+  const selectViewMode = useCallback((mode: CalendarViewMode) => {
+    setWeekAnchorDate(today)
+    setViewResetKey((current) => current + 1)
     setViewMode(mode)
     storeViewMode(mode)
-  }
+  }, [today])
 
-  function openWeekForDate(date: string) {
+  const openWeekForDate = useCallback((date: string) => {
     setWeekAnchorDate(clamp(date, startDate, endDate))
-    selectViewMode('week')
-  }
+    setViewResetKey((current) => current + 1)
+    setViewMode('week')
+    storeViewMode('week')
+  }, [endDate, startDate])
 
   return (
     <>
@@ -241,24 +270,40 @@ export function PublicCalendarView({
           <p>이 기간에 공개된 일정이 생기면 이곳에 표시됩니다.</p>
         </section>
       ) : viewMode === 'list' ? (
-        <section className="visitor-list" aria-label="날짜별 일정 목록">
-          <EventList data={data} />
+        <section
+          className="visitor-list"
+          aria-label="날짜별 일정 목록"
+          key={`list-${viewResetKey}`}
+        >
+          <EventList occurrences={occurrences} today={today} />
         </section>
       ) : viewMode === 'week' ? (
-        <section className="visitor-week" aria-label="주간 일정 달력">
+        <section
+          className="visitor-week"
+          aria-label="주간 일정 달력"
+          key={`week-${viewResetKey}`}
+        >
           <WeekCalendar
             anchorDate={weekAnchorDate}
-            data={data}
+            endDate={endDate}
+            eventsByDate={eventsByDate}
             onAnchorDateChange={setWeekAnchorDate}
             onSelectEvent={setSelectedEvent}
+            startDate={startDate}
           />
         </section>
       ) : (
-        <section className="visitor-month" aria-label="월간 일정 달력">
+        <section
+          className="visitor-month"
+          aria-label="월간 일정 달력"
+          key={`month-${viewResetKey}`}
+        >
           <MonthCalendar
-            data={data}
+            endDate={endDate}
+            eventsByDate={eventsByDate}
             onSelectDate={openWeekForDate}
             onSelectEvent={setSelectedEvent}
+            startDate={startDate}
           />
         </section>
       )}
@@ -299,21 +344,115 @@ function PublicStatus({
   )
 }
 
-function EventList({ data }: { readonly data: PublicCalendarData }) {
-  const grouped = groupEvents(data)
+const EventList = memo(function EventList({
+  occurrences,
+  today,
+}: {
+  readonly occurrences: EventOccurrence[]
+  readonly today: string
+}) {
+  const initialPageStart = useMemo(
+    () => initialListPageStart(occurrences, today),
+    [occurrences, today],
+  )
+  const [pageStart, setPageStart] = useState(initialPageStart)
+  const listTopRef = useRef<HTMLDivElement>(null)
+  const pageEnd = Math.min(pageStart + listPageSize, occurrences.length)
+  const visibleOccurrences = occurrences.slice(pageStart, pageEnd)
+  const grouped = groupOccurrences(visibleOccurrences)
+
+  useEffect(() => {
+    setPageStart((current) =>
+      Math.min(current, Math.max(0, occurrences.length - 1)),
+    )
+  }, [occurrences.length])
+
+  function showPage(nextStart: number) {
+    setPageStart(nextStart)
+    const scrollToList = () => {
+      listTopRef.current?.scrollIntoView?.({ block: 'start' })
+    }
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(scrollToList)
+    } else {
+      scrollToList()
+    }
+  }
+
   return (
-    <div className="event-groups">
-      {grouped.map(([date, events]) => (
-        <section className="event-group" key={date} aria-labelledby={`date-${date}`}>
-          <h2 id={`date-${date}`}>{formatDateHeading(date)}</h2>
-          <div className="event-stack">
-            {events.map((event) => (
-              <EventCard event={event} key={event.id} />
-            ))}
-          </div>
-        </section>
-      ))}
+    <div className="event-list-page" ref={listTopRef}>
+      <EventListPagination
+        initialPageStart={initialPageStart}
+        onShowPage={showPage}
+        pageEnd={pageEnd}
+        pageStart={pageStart}
+        total={occurrences.length}
+      />
+      <div className="event-groups">
+        {grouped.map(([date, events]) => (
+          <section className="event-group" key={date} aria-labelledby={`date-${date}`}>
+            <h2 id={`date-${date}`}>{formatDateHeading(date)}</h2>
+            <div className="event-stack">
+              {events.map((event) => (
+                <EventCard event={event} key={`${date}-${event.id}`} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      <EventListPagination
+        initialPageStart={initialPageStart}
+        onShowPage={showPage}
+        pageEnd={pageEnd}
+        pageStart={pageStart}
+        total={occurrences.length}
+      />
     </div>
+  )
+})
+
+function EventListPagination({
+  initialPageStart,
+  onShowPage,
+  pageEnd,
+  pageStart,
+  total,
+}: {
+  readonly initialPageStart: number
+  readonly onShowPage: (start: number) => void
+  readonly pageEnd: number
+  readonly pageStart: number
+  readonly total: number
+}) {
+  const previousStart = Math.max(0, pageStart - listPageSize)
+  const nextStart = pageEnd
+  return (
+    <nav className="event-list-pagination" aria-label="목록 일정 페이지">
+      <button
+        disabled={pageStart === 0}
+        onClick={() => onShowPage(previousStart)}
+        type="button"
+      >
+        이전 일정
+      </button>
+      <button
+        disabled={pageStart === initialPageStart}
+        onClick={() => onShowPage(initialPageStart)}
+        type="button"
+      >
+        오늘
+      </button>
+      <button
+        disabled={pageEnd >= total}
+        onClick={() => onShowPage(nextStart)}
+        type="button"
+      >
+        다음 일정
+      </button>
+      <span aria-live="polite">
+        {total === 0 ? 0 : pageStart + 1}–{pageEnd} / {total}개 일정
+      </span>
+    </nav>
   )
 }
 
@@ -428,16 +567,19 @@ function EventDetailDialog({
   )
 }
 
-function MonthCalendar({
-  data,
+const MonthCalendar = memo(function MonthCalendar({
+  endDate,
+  eventsByDate,
   onSelectDate,
   onSelectEvent,
+  startDate,
 }: {
-  readonly data: PublicCalendarData
+  readonly endDate: string
+  readonly eventsByDate: ReadonlyMap<string, PublicEvent[]>
   readonly onSelectDate: (date: string) => void
   readonly onSelectEvent: (event: PublicEvent) => void
+  readonly startDate: string
 }) {
-  const [startDate, endDate] = calendarBounds(data)
   const startMonth = startDate.slice(0, 7)
   const endMonth = endDate.slice(0, 7)
   const todayMonth = formatLocalDate(new Date().toISOString()).slice(0, 7)
@@ -490,7 +632,7 @@ function MonthCalendar({
             return <div className="calendar-day calendar-day--blank" key={`blank-${index}`} />
           }
           const inRange = date >= startDate && date <= endDate
-          const events = inRange ? eventsForDate(data.events, date) : []
+          const events = inRange ? (eventsByDate.get(date) ?? []) : []
           return (
             <div
               className={`calendar-day${inRange ? '' : ' calendar-day--outside'}`}
@@ -537,22 +679,25 @@ function MonthCalendar({
       </div>
     </div>
   )
-}
+})
 
 const weekHourHeight = 34
 
-function WeekCalendar({
+const WeekCalendar = memo(function WeekCalendar({
   anchorDate,
-  data,
+  endDate,
+  eventsByDate,
   onAnchorDateChange,
   onSelectEvent,
+  startDate,
 }: {
   readonly anchorDate: string
-  readonly data: PublicCalendarData
+  readonly endDate: string
+  readonly eventsByDate: ReadonlyMap<string, PublicEvent[]>
   readonly onAnchorDateChange: (date: string) => void
   readonly onSelectEvent: (event: PublicEvent) => void
+  readonly startDate: string
 }) {
-  const [startDate, endDate] = calendarBounds(data)
   const today = formatLocalDate(new Date().toISOString())
   const boundedAnchorDate = clamp(anchorDate, startDate, endDate)
   const weekStart = startOfWeek(boundedAnchorDate)
@@ -623,7 +768,7 @@ function WeekCalendar({
           {dates.map((date) => {
             const inRange = date >= startDate && date <= endDate
             const events = inRange
-              ? eventsForDate(data.events, date).filter(isUntimedEvent)
+              ? (eventsByDate.get(date) ?? []).filter(isUntimedEvent)
               : []
             return (
               <div
@@ -656,7 +801,7 @@ function WeekCalendar({
           {dates.map((date) => {
             const inRange = date >= startDate && date <= endDate
             const events = inRange
-              ? layoutTimedEventsForDate(data.events, date)
+              ? layoutTimedEventsForDate(eventsByDate.get(date) ?? [], date)
               : []
             return (
               <div
@@ -679,7 +824,7 @@ function WeekCalendar({
       </div>
     </div>
   )
-}
+})
 
 function WeekAllDayEvent({
   event,
@@ -746,9 +891,12 @@ function WeekTimedEvent({
   )
 }
 
-function groupEvents(data: PublicCalendarData): Array<[string, PublicEvent[]]> {
+function groupEvents(
+  data: PublicCalendarData,
+  policyStart: string,
+  policyEnd: string,
+): Array<[string, PublicEvent[]]> {
   const grouped = new Map<string, PublicEvent[]>()
-  const [policyStart, policyEnd] = calendarBounds(data)
   for (const event of data.events) {
     const range = eventDateRange(event)
     const start = range
@@ -764,6 +912,28 @@ function groupEvents(data: PublicCalendarData): Array<[string, PublicEvent[]]> {
     }
   }
   return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right))
+}
+
+function groupOccurrences(
+  occurrences: EventOccurrence[],
+): Array<[string, PublicEvent[]]> {
+  const grouped = new Map<string, PublicEvent[]>()
+  for (const { date, event } of occurrences) {
+    const existing = grouped.get(date) ?? []
+    existing.push(event)
+    grouped.set(date, existing)
+  }
+  return [...grouped.entries()]
+}
+
+function initialListPageStart(
+  occurrences: EventOccurrence[],
+  today: string,
+): number {
+  const todayIndex = occurrences.findIndex(({ date }) => date >= today)
+  return todayIndex === -1
+    ? Math.max(0, occurrences.length - listPageSize)
+    : todayIndex
 }
 
 function calendarBounds(data: PublicCalendarData): [string, string] {
@@ -782,13 +952,6 @@ function calendarBounds(data: PublicCalendarData): [string, string] {
   const starts = ranges.map(([start]) => start).sort()
   const ends = ranges.map(([, end]) => end).sort()
   return [starts[0] ?? today, ends.at(-1) ?? today]
-}
-
-function eventsForDate(events: PublicEvent[], date: string): PublicEvent[] {
-  return events.filter((event) => {
-    const range = eventDateRange(event)
-    return range ? date >= range[0] && date <= range[1] : false
-  })
 }
 
 function eventDisplayDate(event: PublicEvent): string {

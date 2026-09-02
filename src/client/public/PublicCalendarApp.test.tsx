@@ -127,6 +127,91 @@ describe('PublicCalendarApp', () => {
     )
   })
 
+  it('starts a large list at today and keeps each page bounded', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
+    const events = Array.from({ length: 400 }, (_, index) =>
+      allDayEvent(
+        index,
+        index < 100
+          ? '2026-08-01'
+          : index < 200
+            ? '2026-08-25'
+            : '2026-08-26',
+      ),
+    )
+    const rendered = render(
+      <PublicCalendarView
+        data={calendarData({
+          events,
+          share: {
+            id: shareId,
+            name: '대량 일정',
+            eventDateScope: 'SELECTED',
+            eventStartDate: '2026-08-01',
+            eventEndDate: '2026-08-31',
+          },
+        })}
+        showStreamStatus={false}
+      />,
+    )
+    const list = rendered.container.querySelector('.visitor-list') as HTMLElement
+
+    expect(within(list).getAllByRole('article')).toHaveLength(80)
+    expect(within(list).getAllByRole('heading', { level: 2 })[0]).toHaveTextContent(
+      '8월 25일',
+    )
+    expect(within(list).queryByText('부하 일정 099')).not.toBeInTheDocument()
+    expect(within(list).getByText('부하 일정 100')).toBeInTheDocument()
+    expect(within(list).getAllByText('101–180 / 400개 일정')).toHaveLength(2)
+
+    fireEvent.click(within(list).getAllByRole('button', { name: '다음 일정' })[0]!)
+    expect(within(list).getAllByRole('article')).toHaveLength(80)
+    expect(within(list).getAllByText('181–260 / 400개 일정')).toHaveLength(2)
+
+    fireEvent.click(within(list).getAllByRole('button', { name: '오늘' })[0]!)
+    expect(within(list).getAllByText('101–180 / 400개 일정')).toHaveLength(2)
+  })
+
+  it('returns week and month views to today whenever their mode is selected', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
+    render(
+      <PublicCalendarView
+        data={calendarData({
+          share: {
+            id: shareId,
+            name: '오늘 기준 일정',
+            eventDateScope: 'SELECTED',
+            eventStartDate: '2026-08-01',
+            eventEndDate: '2026-10-31',
+          },
+        })}
+        showStreamStatus={false}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '주간' }))
+    expect(
+      screen.getByRole('heading', { name: '2026년 8월 24일 – 8월 30일' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '다음 주' }))
+    expect(
+      screen.getByRole('heading', { name: '2026년 8월 31일 – 9월 6일' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '월간' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 달' }))
+    expect(screen.getByRole('heading', { name: '2026년 9월' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '주간' }))
+    expect(
+      screen.getByRole('heading', { name: '2026년 8월 24일 – 8월 30일' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '월간' }))
+    expect(screen.getByRole('heading', { name: '2026년 8월' })).toBeInTheDocument()
+  })
+
   it('shows a multi-day event in each all-day cell it spans', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
@@ -345,6 +430,27 @@ function calendarData(
       },
     ],
     ...overrides,
+  }
+}
+
+function allDayEvent(
+  index: number,
+  startDate: string,
+): PublicCalendarData['events'][number] {
+  const end = new Date(`${startDate}T00:00:00.000Z`)
+  end.setUTCDate(end.getUTCDate() + 1)
+  return {
+    id: `load-event-${index}`,
+    calendar: { id: 'calendar-load', name: '부하', color: '#4b9ad1' },
+    isAllDay: true,
+    startsAt: null,
+    endsAt: null,
+    startDate,
+    endDate: end.toISOString().slice(0, 10),
+    title: `부하 일정 ${String(index).padStart(3, '0')}`,
+    location: null,
+    description: null,
+    isPrivate: false,
   }
 }
 

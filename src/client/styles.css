@@ -712,10 +712,56 @@ button:disabled {
   box-shadow: 0 3px 10px rgba(38, 91, 125, 0.12);
 }
 
+.event-list-page {
+  scroll-margin-top: 16px;
+}
+
+.event-list-pagination {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.event-list-pagination button {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #cfe0eb;
+  border-radius: 12px;
+  color: #285b7c;
+  background: #ffffff;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.event-list-pagination button:disabled {
+  color: #91a4b1;
+  background: #f2f6f8;
+  cursor: default;
+}
+
+.event-list-pagination span {
+  grid-column: 1 / -1;
+  color: #526b7b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.event-list-pagination + .event-groups {
+  margin-top: 20px;
+}
+
 .event-groups {
   display: grid;
   gap: 34px;
   margin-top: 30px;
+}
+
+.event-group {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
 }
 
 .event-group h2 {
