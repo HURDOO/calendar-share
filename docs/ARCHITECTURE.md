@@ -195,7 +195,7 @@ Google 계약 근거:
 - Google webhook과 OAuth callback은 위 공개 HTTPS origin의 고정 경로를 사용한다. wildcard DNS는 deploy-project 플랫폼이 제공하며 앱별 DNS를 별도로 만들지 않는다.
 - 배포 전 마이그레이션 호환성과 SQLite 온라인 백업을 확인한다. 롤백은 먼저 이전 앱 이미지가 현재 스키마와 호환되는지 확인한다.
 - 온라인 backup은 checksum, SQLite integrity/foreign key, migration 개수를 검증하고 mode 0600으로 저장한다. restore는 같은 검증 뒤 존재하지 않는 별도 DB만 만들며 live DB를 덮어쓰지 않는다.
-- runtime 이미지는 비루트 `node`, read-only root, `/tmp` tmpfs, capability drop, `no-new-privileges`, writable `/data`를 전제로 한다. base는 Node.js 24.19.0 ARM64 digest, package manager는 pnpm 11.12.0으로 고정한다.
+- runtime 이미지는 비루트 `node`, read-only root, `/tmp` tmpfs, capability drop, `no-new-privileges`, writable `/data`를 전제로 한다. base는 Node.js 24.22.1 ARM64 digest, package manager는 pnpm 11.12.0으로 고정한다.
 - 비호환 스키마 롤백은 서비스를 중지하고 승인된 복구 지점으로 복원해야 하므로 자동 수행하지 않는다.
 
 ## 12. 알려진 위험과 대안

@@ -55,7 +55,7 @@ hash·암호문 중심 저장     PKCE/state/watch token 검증
 | API 부재 fallback | EventSource가 없으면 일정은 유지하고 “새로고침으로 업데이트” 상태를 표시함 |
 | 비밀값 | client bundle 3개 파일에서 server secret 이름, Google API key, private key, `.env.local` 흔적 없음 |
 | 의존성 | `pnpm audit --prod` 알려진 취약점 0건 |
-| ARM64 runtime | Node.js 24.19.0 Linux ARM64에서 native `better-sqlite3`, migration, health/UI/API, online backup→restore, non-root/read-only root/cap drop/no-new-privileges, SIGTERM exit 0, 재시작 데이터 지속성 통과 |
+| ARM64 runtime | Node.js 24.22.1 Linux ARM64에서 native `better-sqlite3`, migration, health/UI/API, online backup→restore, non-root/read-only root/cap drop/no-new-privileges, SIGTERM exit 0, 재시작 데이터 지속성 통과 |
 
 자동 검사는 접근성 전체를 증명하지 않으며 Playwright 기기 emulation은 실제 KakaoTalk 앱 자체가 아니다.
 
