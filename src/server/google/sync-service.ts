@@ -560,7 +560,17 @@ function normalizePlainText(value: string | undefined): string | null {
 
 function classifySyncError(error: unknown): string {
   if (error instanceof GoogleApiError) {
-    return `GOOGLE_${error.category}`
+    return googleErrorCode(error)
   }
   return 'SYNC_INVALID_DATA'
+}
+
+// Permanent failures carry the HTTP status and Google reason so the admin
+// screen shows something actionable instead of a bare GOOGLE_PERMANENT.
+export function googleErrorCode(error: GoogleApiError): string {
+  const base = `GOOGLE_${error.category}`
+  if (error.category !== 'PERMANENT') {
+    return base
+  }
+  return [base, error.status || null, error.reason].filter(Boolean).join('_')
 }

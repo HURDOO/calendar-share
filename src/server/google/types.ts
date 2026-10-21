@@ -92,6 +92,8 @@ export class GoogleApiError extends Error {
   constructor(
     readonly status: number,
     readonly category: 'AUTH' | 'GONE' | 'RATE_LIMIT' | 'TRANSIENT' | 'PERMANENT',
+    // Google's machine-readable reason (e.g. invalid_grant, notFound). Never a token or message.
+    readonly reason: string | null = null,
   ) {
     super(`Google API request failed (${category})`)
     this.name = 'GoogleApiError'

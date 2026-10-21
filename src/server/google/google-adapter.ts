@@ -251,27 +251,118 @@ function watchResult(
   return { resourceId, expiration: new Date(Number(expiration)) }
 }
 
-function toGoogleApiError(error: unknown): GoogleApiError {
-  const status =
-    typeof error === 'object' && error && 'code' in error
-      ? Number((error as { code?: unknown }).code)
-      : 500
+// OAuth token endpoint errors that mean the stored grant no longer works.
+const oauthReauthorizationErrors = new Set([
+  'invalid_client',
+  'invalid_grant',
+  'unauthorized_client',
+])
+const rateLimitReasons = new Set(['rateLimitExceeded', 'userRateLimitExceeded'])
+
+export function toGoogleApiError(error: unknown): GoogleApiError {
+  if (error instanceof GoogleApiError) {
+    return error
+  }
+
+  const status = httpStatus(error)
+  const reason = googleReason(error)
+
+  if (status === null) {
+    // No HTTP response: DNS, connection or timeout failure.
+    return isNetworkFailure(error)
+      ? new GoogleApiError(0, 'TRANSIENT', networkCode(error))
+      : new GoogleApiError(0, 'PERMANENT', reason)
+  }
+
+  if (status === 400 && reason && oauthReauthorizationErrors.has(reason)) {
+    return new GoogleApiError(status, 'AUTH', reason)
+  }
+
+  if (status === 429 || (status === 403 && reason && rateLimitReasons.has(reason))) {
+    return new GoogleApiError(status, 'RATE_LIMIT', reason)
+  }
 
   if (status === 401 || status === 403) {
-    return new GoogleApiError(status, 'AUTH')
+    return new GoogleApiError(status, 'AUTH', reason)
   }
 
   if (status === 410) {
-    return new GoogleApiError(status, 'GONE')
+    return new GoogleApiError(status, 'GONE', reason)
   }
 
-  if (status === 429) {
-    return new GoogleApiError(status, 'RATE_LIMIT')
+  if (status === 408 || status >= 500) {
+    return new GoogleApiError(status, 'TRANSIENT', reason)
   }
 
-  if (status >= 500) {
-    return new GoogleApiError(status, 'TRANSIENT')
+  return new GoogleApiError(status, 'PERMANENT', reason)
+}
+
+function httpStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || !error) {
+    return null
   }
 
-  return new GoogleApiError(status, 'PERMANENT')
+  const candidate = error as {
+    status?: unknown
+    code?: unknown
+    response?: { status?: unknown }
+  }
+  for (const value of [candidate.status, candidate.response?.status, candidate.code]) {
+    const parsed =
+      typeof value === 'number'
+        ? value
+        : typeof value === 'string' && /^\d{3}$/.test(value)
+          ? Number(value)
+          : NaN
+    if (Number.isInteger(parsed) && parsed >= 100 && parsed <= 599) {
+      return parsed
+    }
+  }
+  return null
+}
+
+function googleReason(error: unknown): string | null {
+  if (typeof error !== 'object' || !error) {
+    return null
+  }
+
+  const data = (error as { response?: { data?: unknown } }).response?.data
+  if (typeof data !== 'object' || !data || !('error' in data)) {
+    return null
+  }
+
+  const body = (data as { error?: unknown }).error
+  if (typeof body === 'string') {
+    return safeToken(body)
+  }
+  if (typeof body === 'object' && body) {
+    const { errors, status } = body as { errors?: unknown; status?: unknown }
+    const first = Array.isArray(errors) ? (errors[0] as { reason?: unknown } | undefined) : undefined
+    return safeToken(first?.reason) ?? safeToken(status)
+  }
+  return null
+}
+
+function isNetworkFailure(error: unknown): boolean {
+  if (typeof error !== 'object' || !error) {
+    return false
+  }
+  const { name, code } = error as { name?: unknown; code?: unknown }
+  return (
+    name === 'GaxiosError' ||
+    name === 'AbortError' ||
+    name === 'TimeoutError' ||
+    (typeof code === 'string' && /^E[A-Z_]+$/.test(code))
+  )
+}
+
+function networkCode(error: unknown): string {
+  const code = (error as { code?: unknown }).code
+  return safeToken(code) ?? 'NETWORK'
+}
+
+function safeToken(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(value)
+    ? value
+    : null
 }

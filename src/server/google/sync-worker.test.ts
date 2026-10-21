@@ -78,6 +78,8 @@ describe('GoogleSyncWorker', () => {
         job_kind: 'CALENDAR_LIST_SYNC',
         result: 'retry_scheduled',
         safe_error_code: `GOOGLE_${category}`,
+        google_status: status,
+        google_reason: null,
       },
       'Synchronization job failed',
     )

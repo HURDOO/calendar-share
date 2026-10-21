@@ -1,5 +1,5 @@
 import { SyncJobQueue, type ClaimedSyncJob } from './job-queue'
-import { GoogleSyncService } from './sync-service'
+import { GoogleSyncService, googleErrorCode } from './sync-service'
 import { GoogleApiError } from './types'
 import { GoogleWatchService } from './watch-service'
 
@@ -60,6 +60,9 @@ export class GoogleSyncWorker {
             status === 'RETRY' ? 'retry_scheduled' : 'failed',
           ),
           safe_error_code: failure.category,
+          ...(error instanceof GoogleApiError
+            ? { google_status: error.status, google_reason: error.reason }
+            : {}),
         },
         'Synchronization job failed',
       )
@@ -130,7 +133,7 @@ function classifyWorkerError(error: unknown): {
 } {
   if (error instanceof GoogleApiError) {
     return {
-      category: `GOOGLE_${error.category}`,
+      category: googleErrorCode(error),
       retryable: error.category === 'RATE_LIMIT' || error.category === 'TRANSIENT',
     }
   }
