@@ -36,6 +36,8 @@ COPY --from=build --chown=node:node /app/drizzle ./drizzle
 RUN chmod -R a+rX /app/drizzle
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json
+# deployd runs as 0:0 with cap_drop ALL; Node 24.22+ fails on an unreadable package.json.
+RUN chmod a+r /app/package.json
 
 USER node
 EXPOSE 8465
