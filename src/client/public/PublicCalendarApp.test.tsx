@@ -278,6 +278,38 @@ describe('PublicCalendarApp', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows a zero-length event on the weekly timetable', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))
+    const rendered = render(
+      <PublicCalendarView
+        data={calendarData({
+          events: [
+            {
+              id: 'event-point',
+              calendar: { id: 'calendar-1', name: '가족', color: '#4b9ad1' },
+              isAllDay: false,
+              startsAt: '2026-08-25T01:00:00.000Z',
+              endsAt: '2026-08-25T01:00:00.000Z',
+              startDate: null,
+              endDate: null,
+              title: '알림 일정',
+              location: null,
+              description: null,
+              isPrivate: false,
+            },
+          ],
+        })}
+        showStreamStatus={false}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '주간' }))
+    const event = rendered.container.querySelector('.week-timed-event')
+    expect(event).toHaveAccessibleName('알림 일정 상세 보기')
+    expect(event).toHaveStyle({ height: '24px', top: '340px' })
+  })
+
   it('shows compact locations, opens details, and opens a monthly date in its week', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-25T00:00:00.000Z'))

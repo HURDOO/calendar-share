@@ -169,6 +169,40 @@ describe('SharePolicyService', () => {
     expect(rotated.share.shareUrl).toBe(rotated.shareUrl)
   })
 
+  it('keeps zero-length events on the range start and drops them on the range end', () => {
+    const { database, policy, shares } = setup()
+    const share = shares.create(writeInput())
+    seedTimedEvent(
+      database,
+      calendarOne,
+      'point-at-start',
+      '시작 시각 알림',
+      '2026-08-24T15:00:00.000Z',
+      '2026-08-24T15:00:00.000Z',
+    )
+    seedTimedEvent(
+      database,
+      calendarOne,
+      'point-inside',
+      '중간 알림',
+      '2026-08-25T03:00:00.000Z',
+      '2026-08-25T03:00:00.000Z',
+    )
+    seedTimedEvent(
+      database,
+      calendarOne,
+      'point-at-end',
+      '다음 날 알림',
+      '2026-08-25T15:00:00.000Z',
+      '2026-08-25T15:00:00.000Z',
+    )
+
+    expect(policy.evaluate(share.share.id).events.map((event) => event.title)).toEqual([
+      '시작 시각 알림',
+      '중간 알림',
+    ])
+  })
+
   it('can expose every event in the retained read model without date boundaries', () => {
     const { database, policy, shares } = setup()
     seedEvent(database, calendarOne, 'outside-selected-range', '전체 범위 일정')

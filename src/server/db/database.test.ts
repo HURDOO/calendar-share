@@ -167,8 +167,12 @@ describe('SQLite database foundation', () => {
     expect(() =>
       insertTimedEvent.run('event-2', 'google-event-1', 2_000, 3_000),
     ).toThrow()
+    // Google allows zero-length events, so end == start is stored.
     expect(() =>
       insertTimedEvent.run('event-3', 'google-event-3', 3_000, 3_000),
+    ).not.toThrow()
+    expect(() =>
+      insertTimedEvent.run('event-5', 'google-event-5', 3_000, 2_999),
     ).toThrow()
     expect(() =>
       database.sqlite

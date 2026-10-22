@@ -153,13 +153,19 @@ export class SharePolicyService {
         where events.calendar_id in (${placeholders})
           and events.status <> 'CANCELLED'
           and (
-            (events.is_all_day = 0 and events.ends_at > ? and events.starts_at < ?)
+            (
+              events.is_all_day = 0
+              and (events.ends_at > ? or events.starts_at >= ?)
+              and events.starts_at < ?
+            )
             or
             (events.is_all_day = 1 and events.end_date > ? and events.start_date < ?)
           )
       `)
       .all(
         ...calendarIds,
+        startInstant,
+        // Also keeps a zero-length event that sits exactly on the range start.
         startInstant,
         endInstant,
         share.event_start_date,
