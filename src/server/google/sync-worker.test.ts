@@ -189,6 +189,7 @@ describe('GoogleSyncWorker', () => {
         items: [
           { id: 'google-calendar-1', summary: '깨진 캘린더', primary: false, deleted: false },
           { id: 'google-calendar-2', summary: '정상 캘린더', primary: true, deleted: false },
+          { id: 'google-calendar-3', summary: '정상 캘린더 2', primary: false, deleted: false },
         ],
         nextSyncToken: 'calendar-token',
       }),
@@ -250,6 +251,11 @@ describe('GoogleSyncWorker', () => {
         sync_status: 'READY',
         last_sync_error_code: null,
       },
+      {
+        google_calendar_id: 'google-calendar-3',
+        sync_status: 'READY',
+        last_sync_error_code: null,
+      },
     ])
     expect(ensureWatches).toHaveBeenCalledTimes(1)
     expect(onEventsChanged).toHaveBeenCalledTimes(1)
@@ -264,7 +270,7 @@ describe('GoogleSyncWorker', () => {
         google_status: 404,
         google_reason: 'notFound',
         failed_calendars: 1,
-        synced_calendars: 1,
+        synced_calendars: 2,
       }),
       'Synchronization job failed',
     )
@@ -307,13 +313,14 @@ describe('GoogleSyncWorker', () => {
     expect(calendarStates(database)).toEqual([
       { google_calendar_id: 'google-calendar-1', sync_status: 'READY', last_sync_error_code: null },
       { google_calendar_id: 'google-calendar-2', sync_status: 'READY', last_sync_error_code: null },
+      { google_calendar_id: 'google-calendar-3', sync_status: 'READY', last_sync_error_code: null },
     ])
     expect(logger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         job_kind: 'RECOVERY_SYNC',
         result: 'succeeded',
-        skipped_events: 2,
-        skipped_event_codes: { GOOGLE_EVENT_TIME_RANGE_INVALID: 2 },
+        skipped_events: 3,
+        skipped_event_codes: { GOOGLE_EVENT_TIME_RANGE_INVALID: 3 },
       }),
       'Synchronization job completed',
     )
@@ -333,7 +340,8 @@ describe('GoogleSyncWorker', () => {
       .prepare(`
         insert into calendars (id, connection_id, google_calendar_id, display_name)
         values ('calendar-1', 1, 'google-calendar-1', '깨진'),
-               ('calendar-2', 1, 'google-calendar-2', '정상')
+               ('calendar-2', 1, 'google-calendar-2', '정상'),
+               ('calendar-3', 1, 'google-calendar-3', '정상 2')
       `)
       .run()
     queue.enqueue('CALENDAR_WINDOW_SYNC', 'calendar-window')
@@ -351,10 +359,17 @@ describe('GoogleSyncWorker', () => {
         sync_status: 'READY',
         last_sync_error_code: null,
       },
+      {
+        google_calendar_id: 'google-calendar-3',
+        sync_status: 'READY',
+        last_sync_error_code: null,
+      },
     ])
     expect(
-      database.sqlite.prepare('select sync_token from calendars where id = ?').get('calendar-2'),
-    ).toEqual({ sync_token: 'window-token' })
+      database.sqlite
+        .prepare("select sync_token from calendars where id in ('calendar-2', 'calendar-3')")
+        .all(),
+    ).toEqual([{ sync_token: 'window-token' }, { sync_token: 'window-token' }])
     expect(
       database.sqlite.prepare('select status from sync_jobs').get(),
     ).toEqual({ status: 'FAILED' })
