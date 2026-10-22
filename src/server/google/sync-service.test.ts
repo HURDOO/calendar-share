@@ -264,7 +264,7 @@ describe('GoogleSyncService', () => {
     })
   })
 
-  it('replaces all calendar windows atomically after every fetch succeeds', async () => {
+  it('replaces the windows of fetched calendars and keeps a failed one as ERROR', async () => {
     const listEvents = vi.fn<GoogleAdapter['listEvents']>(async (request) => {
       if (request.calendarId === 'google-calendar-2') {
         throw new GoogleApiError(429, 'RATE_LIMIT')
@@ -280,11 +280,138 @@ describe('GoogleSyncService', () => {
     seedStoredEvent(database, 'calendar-1', 'event-old-1', '기존 일정 1')
     seedStoredEvent(database, 'calendar-2', 'event-old-2', '기존 일정 2')
 
-    await expect(service.replaceAllWindows()).rejects.toThrow()
+    const result = await service.replaceAllWindows()
 
+    expect(result.syncedCount).toBe(1)
+    expect(result.failures).toHaveLength(1)
     expect(
       database.sqlite.prepare('select title from events order by title').all(),
-    ).toEqual([{ title: '기존 일정 1' }, { title: '기존 일정 2' }])
+    ).toEqual([{ title: '기존 일정 2' }, { title: '새 일정' }])
+    expect(
+      database.sqlite
+        .prepare('select id, sync_status, last_sync_error_code from calendars order by id')
+        .all(),
+    ).toEqual([
+      { id: 'calendar-1', sync_status: 'READY', last_sync_error_code: null },
+      {
+        id: 'calendar-2',
+        sync_status: 'ERROR',
+        last_sync_error_code: 'GOOGLE_RATE_LIMIT',
+      },
+    ])
+  })
+
+  it('stores zero-length events that Google allows', async () => {
+    const listEvents = vi.fn<GoogleAdapter['listEvents']>(async () => ({
+      items: [
+        {
+          ...timedEvent('event-point', '알림 일정'),
+          start: { dateTime: '2026-08-25T10:00:00+09:00', timeZone: 'Asia/Seoul' },
+          end: { dateTime: '2026-08-25T10:00:00+09:00', timeZone: 'Asia/Seoul' },
+        },
+      ],
+      nextSyncToken: 'events-token',
+    }))
+    const { database, service } = setup(createFakeGoogleAdapter({ listEvents }))
+    seedCalendar(database, 'calendar-1', 'google-calendar-1')
+
+    await expect(service.syncCalendar('calendar-1', true)).resolves.toEqual({})
+
+    const point = Date.parse('2026-08-25T10:00:00+09:00')
+    expect(
+      database.sqlite.prepare('select title, starts_at, ends_at from events').get(),
+    ).toEqual({ title: '알림 일정', starts_at: point, ends_at: point })
+    expect(
+      database.sqlite
+        .prepare('select sync_status from calendars where id = ?')
+        .get('calendar-1'),
+    ).toEqual({ sync_status: 'READY' })
+  })
+
+  it('skips an invalid event, counts it by reason and keeps the calendar READY', async () => {
+    const listEvents = vi.fn<GoogleAdapter['listEvents']>(async () => ({
+      items: [
+        timedEvent('event-good', '정상 일정'),
+        {
+          ...timedEvent('event-reversed', '거꾸로 일정'),
+          start: { dateTime: '2026-08-25T11:00:00+09:00' },
+          end: { dateTime: '2026-08-25T10:00:00+09:00' },
+        },
+        { id: 'event-no-time', status: 'confirmed', summary: '시간 없음' },
+      ],
+      nextSyncToken: 'events-token',
+    }))
+    const { database, service } = setup(createFakeGoogleAdapter({ listEvents }))
+    seedCalendar(database, 'calendar-1', 'google-calendar-1')
+
+    const skipped = await service.syncCalendar('calendar-1', true)
+
+    expect(skipped).toEqual({
+      GOOGLE_EVENT_TIME_MISSING: 1,
+      GOOGLE_EVENT_TIME_RANGE_INVALID: 1,
+    })
+    expect(JSON.stringify(skipped)).not.toContain('event-')
+    expect(database.sqlite.prepare('select title from events').all()).toEqual([
+      { title: '정상 일정' },
+    ])
+    expect(
+      database.sqlite
+        .prepare('select sync_status, last_sync_error_code from calendars where id = ?')
+        .get('calendar-1'),
+    ).toEqual({ sync_status: 'READY', last_sync_error_code: null })
+  })
+
+  it('removes the stored copy when an incremental change is invalid', async () => {
+    const listEvents = vi.fn<GoogleAdapter['listEvents']>(async () => ({
+      items: [{ id: 'event-old', status: 'confirmed', summary: '깨진 변경' }],
+      nextSyncToken: 'events-next',
+    }))
+    const { database, service } = setup(createFakeGoogleAdapter({ listEvents }))
+    seedCalendar(database, 'calendar-1', 'google-calendar-1', 'events-old')
+    seedStoredEvent(database, 'calendar-1', 'event-old', '예전 일정')
+
+    await expect(service.syncCalendar('calendar-1')).resolves.toEqual({
+      GOOGLE_EVENT_TIME_MISSING: 1,
+    })
+
+    expect(database.sqlite.prepare('select count(*) as count from events').get()).toEqual({
+      count: 0,
+    })
+    expect(
+      database.sqlite.prepare('select sync_token from calendars where id = ?').get('calendar-1'),
+    ).toEqual({ sync_token: 'events-next' })
+  })
+
+  it('syncs every calendar even when one of them fails', async () => {
+    const listEvents = vi.fn<GoogleAdapter['listEvents']>(async (request) => {
+      if (request.calendarId === 'google-calendar-1') {
+        throw new GoogleApiError(404, 'PERMANENT', 'notFound')
+      }
+      return {
+        items: [timedEvent(`event-${request.calendarId}`, '새 일정')],
+        nextSyncToken: 'new-token',
+      }
+    })
+    const { database, service } = setup(createFakeGoogleAdapter({ listEvents }))
+    seedCalendar(database, 'calendar-1', 'google-calendar-1')
+    seedCalendar(database, 'calendar-2', 'google-calendar-2')
+
+    const result = await service.syncCalendars(['calendar-1', 'calendar-2'])
+
+    expect(result.syncedCount).toBe(1)
+    expect(result.failures).toHaveLength(1)
+    expect(
+      database.sqlite
+        .prepare('select id, sync_status, last_sync_error_code from calendars order by id')
+        .all(),
+    ).toEqual([
+      {
+        id: 'calendar-1',
+        sync_status: 'ERROR',
+        last_sync_error_code: 'GOOGLE_PERMANENT_404_notFound',
+      },
+      { id: 'calendar-2', sync_status: 'READY', last_sync_error_code: null },
+    ])
   })
 })
 

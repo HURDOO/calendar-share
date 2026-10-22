@@ -21,7 +21,34 @@ interface EventSnapshot {
   readonly calendar: CalendarRow
   readonly events: NormalizedEvent[]
   readonly nextSyncToken: string
+  readonly skippedEvents: SkippedEventCounts
   readonly window: SyncWindow
+}
+
+// Number of skipped events per safe reason code. Never holds event content or IDs.
+export type SkippedEventCounts = Record<string, number>
+
+export interface CalendarBatchResult {
+  readonly failures: unknown[]
+  readonly skippedEvents: SkippedEventCounts
+  readonly syncedCount: number
+}
+
+// One Google event whose data the app cannot store. The event is skipped so the
+// rest of its calendar still syncs.
+export class InvalidEventError extends Error {
+  constructor(readonly code: string) {
+    super(code)
+    this.name = 'InvalidEventError'
+  }
+}
+
+// Some calendars failed while the others in the same job were synced.
+export class CalendarSyncFailures extends Error {
+  constructor(readonly result: CalendarBatchResult) {
+    super(`${result.failures.length} calendar sync(s) failed`)
+    this.name = 'CalendarSyncFailures'
+  }
 }
 
 interface NormalizedEvent {
@@ -70,7 +97,10 @@ export class GoogleSyncService {
     }
   }
 
-  async syncCalendar(calendarId: string, forceFull = false): Promise<void> {
+  async syncCalendar(
+    calendarId: string,
+    forceFull = false,
+  ): Promise<SkippedEventCounts> {
     this.prepareAdapter()
     const calendar = this.calendarRow(calendarId)
     const syncToken = forceFull ? null : calendar.sync_token
@@ -78,8 +108,7 @@ export class GoogleSyncService {
     try {
       if (syncToken) {
         try {
-          await this.applyIncrementalSync(calendar, syncToken)
-          return
+          return await this.applyIncrementalSync(calendar, syncToken)
         } catch (error) {
           if (!(error instanceof GoogleApiError) || error.status !== 410) {
             throw error
@@ -92,23 +121,55 @@ export class GoogleSyncService {
         createSyncWindow(this.now(), this.timeZone),
       )
       this.replaceSnapshots([snapshot])
+      return snapshot.skippedEvents
     } catch (error) {
       this.markCalendarError(calendar.id, classifySyncError(error))
       throw error
     }
   }
 
-  async replaceAllWindows(): Promise<void> {
+  // Syncs each calendar on its own so one failing calendar does not stop the rest.
+  // Failed calendars keep their own ERROR state; the caller decides how to report them.
+  async syncCalendars(calendarIds: string[]): Promise<CalendarBatchResult> {
+    const failures: unknown[] = []
+    const skippedEvents: SkippedEventCounts = {}
+    let syncedCount = 0
+
+    for (const calendarId of calendarIds) {
+      try {
+        addCounts(skippedEvents, await this.syncCalendar(calendarId))
+        syncedCount += 1
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+
+    return { failures, skippedEvents, syncedCount }
+  }
+
+  // Replaces the window of every calendar that could be fetched in one transaction.
+  // A calendar that fails keeps its previous snapshot and is marked ERROR.
+  async replaceAllWindows(): Promise<CalendarBatchResult> {
     this.prepareAdapter()
     const window = createSyncWindow(this.now(), this.timeZone)
     const calendars = this.activeCalendarRows()
     const snapshots: EventSnapshot[] = []
+    const failures: unknown[] = []
+    const skippedEvents: SkippedEventCounts = {}
 
     for (const calendar of calendars) {
-      snapshots.push(await this.fetchFullSnapshot(calendar, window))
+      try {
+        const snapshot = await this.fetchFullSnapshot(calendar, window)
+        snapshots.push(snapshot)
+        addCounts(skippedEvents, snapshot.skippedEvents)
+      } catch (error) {
+        this.markCalendarError(calendar.id, classifySyncError(error))
+        failures.push(error)
+      }
     }
 
     this.replaceSnapshots(snapshots)
+    return { failures, skippedEvents, syncedCount: snapshots.length }
   }
 
   activeCalendarIds(): string[] {
@@ -197,7 +258,7 @@ export class GoogleSyncService {
   private async applyIncrementalSync(
     calendar: CalendarRow,
     syncToken: string,
-  ): Promise<void> {
+  ): Promise<SkippedEventCounts> {
     const { items, nextSyncToken } = await collectPages((pageToken) =>
       this.adapter.listEvents({
         calendarId: calendar.google_calendar_id,
@@ -211,9 +272,8 @@ export class GoogleSyncService {
     }
 
     const changed = dedupeEvents(items)
-    const normalized = changed.flatMap((event) =>
-      event.status?.toLowerCase() === 'cancelled' ? [] : [normalizeEvent(event)],
-    )
+    const { events: normalized, skippedEventIds, skippedEvents } =
+      normalizeEvents(changed)
     const now = this.now()
     const applyChanges = this.database.sqlite.transaction(() => {
       const remove = this.database.sqlite.prepare(
@@ -225,11 +285,16 @@ export class GoogleSyncService {
           remove.run(calendar.id, event.id)
         }
       }
+      // A skipped change must not leave its older stored copy on screen.
+      for (const eventId of skippedEventIds) {
+        remove.run(calendar.id, eventId)
+      }
 
       this.upsertEvents(calendar.id, normalized, now)
       this.markCalendarReady(calendar.id, nextSyncToken, null, now)
     })
     applyChanges()
+    return skippedEvents
   }
 
   private async fetchFullSnapshot(
@@ -249,11 +314,9 @@ export class GoogleSyncService {
       throw new Error('GOOGLE_EVENT_SYNC_TOKEN_MISSING')
     }
 
-    const events = dedupeEvents(items).flatMap((event) =>
-      event.status?.toLowerCase() === 'cancelled' ? [] : [normalizeEvent(event)],
-    )
+    const { events, skippedEvents } = normalizeEvents(dedupeEvents(items))
 
-    return { calendar, events, nextSyncToken, window }
+    return { calendar, events, nextSyncToken, skippedEvents, window }
   }
 
   private replaceSnapshots(snapshots: EventSnapshot[]): void {
@@ -447,6 +510,39 @@ function dedupeEvents(items: GoogleEventEntry[]): GoogleEventEntry[] {
   return [...new Map(items.map((item) => [item.id, item])).values()]
 }
 
+function normalizeEvents(items: GoogleEventEntry[]): {
+  readonly events: NormalizedEvent[]
+  readonly skippedEventIds: string[]
+  readonly skippedEvents: SkippedEventCounts
+} {
+  const events: NormalizedEvent[] = []
+  const skippedEventIds: string[] = []
+  const skippedEvents: SkippedEventCounts = {}
+
+  for (const event of items) {
+    if (event.status?.toLowerCase() === 'cancelled') {
+      continue
+    }
+    try {
+      events.push(normalizeEvent(event))
+    } catch (error) {
+      if (!(error instanceof InvalidEventError)) {
+        throw error
+      }
+      skippedEventIds.push(event.id)
+      addCounts(skippedEvents, { [error.code]: 1 })
+    }
+  }
+
+  return { events, skippedEventIds, skippedEvents }
+}
+
+function addCounts(target: SkippedEventCounts, source: SkippedEventCounts): void {
+  for (const [code, count] of Object.entries(source)) {
+    target[code] = (target[code] ?? 0) + count
+  }
+}
+
 function normalizeEvent(event: GoogleEventEntry): NormalizedEvent {
   const visibility = normalizeVisibility(event.visibility)
   const isPrivate = visibility === 'PRIVATE'
@@ -470,7 +566,7 @@ function normalizeEvent(event: GoogleEventEntry): NormalizedEvent {
     assertDate(event.start.date)
     assertDate(event.end.date)
     if (event.end.date <= event.start.date) {
-      throw new Error('GOOGLE_EVENT_DATE_RANGE_INVALID')
+      throw new InvalidEventError('GOOGLE_EVENT_DATE_RANGE_INVALID')
     }
 
     return {
@@ -488,8 +584,9 @@ function normalizeEvent(event: GoogleEventEntry): NormalizedEvent {
   if (event.start?.dateTime && event.end?.dateTime) {
     const startsAt = parseInstant(event.start.dateTime)
     const endsAt = parseInstant(event.end.dateTime)
-    if (endsAt <= startsAt) {
-      throw new Error('GOOGLE_EVENT_TIME_RANGE_INVALID')
+    // Google allows zero-length events (end == start); only a reversed range is invalid.
+    if (endsAt < startsAt) {
+      throw new InvalidEventError('GOOGLE_EVENT_TIME_RANGE_INVALID')
     }
 
     return {
@@ -504,7 +601,7 @@ function normalizeEvent(event: GoogleEventEntry): NormalizedEvent {
     }
   }
 
-  throw new Error('GOOGLE_EVENT_TIME_MISSING')
+  throw new InvalidEventError('GOOGLE_EVENT_TIME_MISSING')
 }
 
 function normalizeVisibility(
@@ -529,14 +626,14 @@ function parseOptionalInstant(value: string | undefined): number | null {
 function parseInstant(value: string): number {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) {
-    throw new Error('GOOGLE_EVENT_INSTANT_INVALID')
+    throw new InvalidEventError('GOOGLE_EVENT_INSTANT_INVALID')
   }
   return timestamp
 }
 
 function assertDate(value: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value !== new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10)) {
-    throw new Error('GOOGLE_EVENT_DATE_INVALID')
+    throw new InvalidEventError('GOOGLE_EVENT_DATE_INVALID')
   }
 }
 

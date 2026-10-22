@@ -163,7 +163,7 @@ export const events = sqliteTable(
         ${table.isAllDay} = 0
         and ${table.startsAt} is not null
         and ${table.endsAt} is not null
-        and ${table.endsAt} > ${table.startsAt}
+        and ${table.endsAt} >= ${table.startsAt}
         and ${table.startDate} is null
         and ${table.endDate} is null
       ) or (

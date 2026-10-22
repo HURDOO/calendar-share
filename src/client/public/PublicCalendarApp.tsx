@@ -993,10 +993,14 @@ function layoutTimedEventsForDate(
       const eventEnd = Date.parse(event.endsAt ?? '')
       const segmentStart = Math.max(eventStart, dayStart)
       const segmentEnd = Math.min(eventEnd, dayEnd)
+      // A zero-length event (end == start) is a point in time: keep it on its own day.
+      const isPoint = eventEnd === eventStart
       if (
         !Number.isFinite(segmentStart) ||
         !Number.isFinite(segmentEnd) ||
-        segmentEnd <= segmentStart
+        (isPoint
+          ? eventStart < dayStart || eventStart >= dayEnd
+          : segmentEnd <= segmentStart)
       ) {
         return []
       }
