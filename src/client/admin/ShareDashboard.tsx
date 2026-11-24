@@ -252,6 +252,107 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
     )
   }
 
+  const now = Date.now()
+  const activeShares = shares.filter((share) => shareState(share, now) === 'ACTIVE')
+  const pastShares = shares.filter((share) => shareState(share, now) !== 'ACTIVE')
+
+  function renderShareCard(share: ShareView) {
+    const state = shareState(share, now)
+    return (
+      <li className="share-card" key={share.id}>
+        <div className="share-card__heading">
+          <div>
+            <span
+              className={`share-state ${state === 'ACTIVE' ? '' : 'share-state--revoked'}`}
+            >
+              {SHARE_STATE_LABEL[state]}
+            </span>
+            <h3>{share.name}</h3>
+          </div>
+          <span className="share-scope">
+            {share.calendarScope === 'ALL'
+              ? '전체 캘린더'
+              : `${share.calendarIds.length}개 캘린더`}
+          </span>
+        </div>
+        <dl className="share-summary">
+          <div>
+            <dt>일정 범위</dt>
+            <dd>{formatEventDateRange(share)}</dd>
+          </div>
+          <div>
+            <dt>접근 시간</dt>
+            <dd>{formatAccessRange(share)}</dd>
+          </div>
+        </dl>
+        {state === 'ACTIVE' ? (
+          share.shareUrl ? (
+            <div className="copy-row share-card__link">
+              <label className="sr-only" htmlFor={`share-link-${share.id}`}>
+                {share.name} 공유 주소
+              </label>
+              <input
+                id={`share-link-${share.id}`}
+                readOnly
+                value={share.shareUrl}
+              />
+              <button
+                className="secondary-button"
+                onClick={() => void copyLink(share)}
+                type="button"
+              >
+                링크 복사
+              </button>
+            </div>
+          ) : (
+            <p className="share-link-unavailable">
+              기존 주소를 다시 표시하려면 새 링크를 발급해 주세요.
+            </p>
+          )
+        ) : null}
+        <div className="share-actions">
+          <button
+            className="secondary-button"
+            onClick={() => void previewShare(share)}
+            type="button"
+          >
+            미리보기
+          </button>
+          {!share.revokedAt ? (
+            <>
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => setEditing(share)}
+                type="button"
+              >
+                수정
+              </button>
+              {!share.shareUrl ? (
+                <button
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => void rotateLink(share)}
+                  type="button"
+                >
+                  새 링크 발급
+                </button>
+              ) : null}
+              <button
+                className="danger-button"
+                disabled={busy}
+                onClick={() => void revokeShare(share)}
+                type="button"
+              >
+                공유 종료
+              </button>
+            </>
+          ) : null}
+        </div>
+      </li>
+    )
+  }
+
   return (
     <section className="admin-panel shares-panel" aria-labelledby="shares-title">
       <div className="shares-heading">
@@ -294,103 +395,19 @@ export function ShareDashboard({ csrfToken }: { readonly csrfToken: string }) {
           <p>새 공유를 만들어 캘린더와 기간을 안전하게 제한할 수 있습니다.</p>
         </div>
       ) : (
-        <ul className="share-list">
-          {shares.map((share) => {
-            return (
-              <li className="share-card" key={share.id}>
-                <div className="share-card__heading">
-                  <div>
-                    <span
-                      className={`share-state ${share.revokedAt ? 'share-state--revoked' : ''}`}
-                    >
-                      {share.revokedAt ? '종료됨' : '공유 중'}
-                    </span>
-                    <h3>{share.name}</h3>
-                  </div>
-                  <span className="share-scope">
-                    {share.calendarScope === 'ALL'
-                      ? '전체 캘린더'
-                      : `${share.calendarIds.length}개 캘린더`}
-                  </span>
-                </div>
-                <dl className="share-summary">
-                  <div>
-                    <dt>일정 범위</dt>
-                    <dd>{formatEventDateRange(share)}</dd>
-                  </div>
-                  <div>
-                    <dt>접근 시간</dt>
-                    <dd>{formatAccessRange(share)}</dd>
-                  </div>
-                </dl>
-                {!share.revokedAt ? (
-                  share.shareUrl ? (
-                    <div className="copy-row share-card__link">
-                      <label className="sr-only" htmlFor={`share-link-${share.id}`}>
-                        {share.name} 공유 주소
-                      </label>
-                      <input
-                        id={`share-link-${share.id}`}
-                        readOnly
-                        value={share.shareUrl}
-                      />
-                      <button
-                        className="secondary-button"
-                        onClick={() => void copyLink(share)}
-                        type="button"
-                      >
-                        링크 복사
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="share-link-unavailable">
-                      기존 주소를 다시 표시하려면 새 링크를 발급해 주세요.
-                    </p>
-                  )
-                ) : null}
-                <div className="share-actions">
-                  <button
-                    className="secondary-button"
-                    onClick={() => void previewShare(share)}
-                    type="button"
-                  >
-                    미리보기
-                  </button>
-                  {!share.revokedAt ? (
-                    <>
-                      <button
-                        className="secondary-button"
-                        disabled={busy}
-                        onClick={() => setEditing(share)}
-                        type="button"
-                      >
-                        수정
-                      </button>
-                      {!share.shareUrl ? (
-                        <button
-                          className="secondary-button"
-                          disabled={busy}
-                          onClick={() => void rotateLink(share)}
-                          type="button"
-                        >
-                          새 링크 발급
-                        </button>
-                      ) : null}
-                      <button
-                        className="danger-button"
-                        disabled={busy}
-                        onClick={() => void revokeShare(share)}
-                        type="button"
-                      >
-                        공유 종료
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+        <>
+          {activeShares.length > 0 ? (
+            <ul className="share-list">{activeShares.map(renderShareCard)}</ul>
+          ) : (
+            <p className="share-list-note">진행 중인 공유가 없습니다.</p>
+          )}
+          {pastShares.length > 0 ? (
+            <details className="past-shares">
+              <summary>지난 공유 {pastShares.length}개</summary>
+              <ul className="share-list">{pastShares.map(renderShareCard)}</ul>
+            </details>
+          ) : null}
+        </>
       )}
 
       <SharePreview preview={preview} onClose={() => setPreview({ status: 'idle' })} />
@@ -751,6 +768,24 @@ function toSharePayload(value: ShareFormValue) {
     eventStartDate: value.eventDateScope === 'ALL' ? null : value.eventStartDate,
     name: value.name.trim(),
   }
+}
+
+type ShareState = 'ACTIVE' | 'EXPIRED' | 'REVOKED'
+
+const SHARE_STATE_LABEL: Record<ShareState, string> = {
+  ACTIVE: '공유 중',
+  EXPIRED: '만료됨',
+  REVOKED: '종료됨',
+}
+
+function shareState(share: ShareView, now: number): ShareState {
+  if (share.revokedAt) {
+    return 'REVOKED'
+  }
+  if (share.accessEndsAt && now >= Date.parse(share.accessEndsAt)) {
+    return 'EXPIRED'
+  }
+  return 'ACTIVE'
 }
 
 function upsertShare(current: ShareView[], share: ShareView): ShareView[] {

@@ -131,6 +131,61 @@ describe('ShareDashboard', () => {
     await userEvent.click(screen.getByRole('button', { name: '공유 종료' }))
     await waitFor(() => expect(screen.getByText('종료됨')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: '수정' })).not.toBeInTheDocument()
+    const pastShares = screen.getByText('지난 공유 1개').closest('details')
+    expect(pastShares).not.toBeNull()
+    expect(pastShares).not.toHaveAttribute('open')
+    expect(within(pastShares!).getByText('종료됨')).toBeInTheDocument()
+    expect(screen.getByText('진행 중인 공유가 없습니다.')).toBeInTheDocument()
+  })
+
+  it('marks shares past their access end as expired and folds them away', async () => {
+    const activeId = '50000000-0000-4000-8000-000000000002'
+    const now = Date.now()
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/admin/calendars')) {
+        return jsonResponse({ calendars: [calendarFixture(calendarOne, '가족', true)] })
+      }
+      if (url.endsWith('/api/v1/admin/shares')) {
+        return jsonResponse({
+          shares: [
+            shareFixture({
+              name: '지난 여행 공유',
+              accessStartsAt: new Date(now - 2 * 86_400_000).toISOString(),
+              accessEndsAt: new Date(now - 60_000).toISOString(),
+              shareUrl: 'https://calendar.app.hurdoo.kr/#share=expired-link',
+            }),
+            shareFixture({
+              id: activeId,
+              name: '가족 공유',
+              accessStartsAt: new Date(now - 60_000).toISOString(),
+              accessEndsAt: new Date(now + 86_400_000).toISOString(),
+            }),
+          ],
+        })
+      }
+      throw new Error(`Unexpected fetch in test: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<ShareDashboard csrfToken="fixture-csrf" />)
+
+    const summary = await screen.findByText('지난 공유 1개')
+    const pastShares = summary.closest('details')!
+    expect(pastShares).not.toHaveAttribute('open')
+
+    const expiredCard = within(pastShares).getByText('지난 여행 공유').closest('li')!
+    expect(within(expiredCard).getByText('만료됨')).toBeInTheDocument()
+    expect(
+      within(expiredCard).queryByDisplayValue(
+        'https://calendar.app.hurdoo.kr/#share=expired-link',
+      ),
+    ).not.toBeInTheDocument()
+    expect(within(expiredCard).getByRole('button', { name: '수정' })).toBeInTheDocument()
+
+    const activeCard = screen.getByText('가족 공유').closest('li')!
+    expect(activeCard.closest('details')).toBeNull()
+    expect(within(activeCard).getByText('공유 중')).toBeInTheDocument()
   })
 })
 

@@ -146,6 +146,8 @@ test('creates, previews, edits, copies, and revokes a share', async ({
   ).toBeVisible()
 
   await page.getByRole('button', { name: '공유 종료' }).click()
+  await expect(page.getByText('진행 중인 공유가 없습니다.')).toBeVisible()
+  await page.getByText('지난 공유 1개').click()
   await expect(page.getByText('종료됨')).toBeVisible()
   await expect(page.getByRole('button', { name: '수정' })).toHaveCount(0)
   expect(mutationCsrfHeaders).toEqual([
@@ -153,6 +155,77 @@ test('creates, previews, edits, copies, and revokes a share', async ({
     'e2e-csrf-token',
     'e2e-csrf-token',
   ])
+})
+
+test('folds shares whose access window has ended', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(new Date('2026-08-25T00:00:00.000Z'))
+  await page.route('**/api/v1/admin/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/v1/admin/session') {
+      return fulfillJson(route, {
+        authenticated: true,
+        csrfToken: 'e2e-csrf-token',
+        expiresAt: '2026-08-25T08:00:00.000Z',
+      })
+    }
+    if (url.pathname === '/api/v1/admin/google/status') {
+      return fulfillJson(route, {
+        connected: true,
+        lastErrorCode: null,
+        lastSyncedAt: '2026-08-25T00:00:00.000Z',
+        calendars: { active: 1, ready: 1 },
+        queue: {},
+      })
+    }
+    if (url.pathname === '/api/v1/admin/calendars') {
+      return fulfillJson(route, {
+        calendars: [calendarFixture(calendarOne, '가족', true)],
+      })
+    }
+    if (url.pathname === '/api/v1/admin/shares') {
+      return fulfillJson(route, {
+        shares: [
+          shareFixture({
+            id: '60000000-0000-4000-8000-000000000002',
+            name: '진행 중 공유',
+            accessStartsAt: '2026-08-24T00:00:00.000Z',
+            accessEndsAt: '2026-08-26T00:00:00.000Z',
+          }),
+          shareFixture({
+            name: '지난 여행 공유',
+            accessStartsAt: '2026-08-20T00:00:00.000Z',
+            accessEndsAt: '2026-08-24T00:00:00.000Z',
+            shareUrl: 'https://calendar.app.hurdoo.kr/#share=e2e-expired-link',
+          }),
+        ],
+      })
+    }
+    return route.fulfill({ status: 404 })
+  })
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 1000 },
+    { name: 'mobile', width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/admin')
+    const activeCard = page.locator('.share-card', { hasText: '진행 중 공유' })
+    await expect(activeCard.getByText('공유 중')).toBeVisible()
+    const expiredCard = page.locator('.share-card', { hasText: '지난 여행 공유' })
+    await expect(expiredCard).toBeHidden()
+
+    await page.getByText('지난 공유 1개').click()
+    await expect(expiredCard.getByText('만료됨')).toBeVisible()
+    await expect(expiredCard.getByRole('button', { name: '수정' })).toBeVisible()
+    await expect(expiredCard.locator('input')).toHaveCount(0)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await page.screenshot({
+      fullPage: true,
+      path: testInfo.outputPath(`expired-shares-${viewport.name}.png`),
+    })
+  }
 })
 
 async function fulfillJson(
